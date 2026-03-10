@@ -305,7 +305,12 @@ function App() {
         }
 
         console.error('Unable to restore session from Supabase', error)
-        const errorDetail = typeof error === 'string' ? error : error?.message
+        const errorDetail =
+          typeof error === 'string'
+            ? error
+            : typeof error?.message === 'string'
+              ? error.message
+              : null
         setAuthError(
           errorDetail
             ? `Unable to restore session: ${errorDetail}. Please sign in.`

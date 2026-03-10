@@ -198,7 +198,8 @@ export async function signInToPrayerApp({ email, password }) {
         ),
       }
     } catch (error) {
-      return { error: normalizeSupabaseAuthError(error) }
+      console.error('Unexpected Supabase sign-in failure', error)
+      return { error: 'Authentication is unavailable right now. Please try again.' }
     }
   }
 
@@ -271,7 +272,8 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
         message: 'Account created successfully.',
       }
     } catch (error) {
-      return { error: normalizeSupabaseAuthError(error) }
+      console.error('Unexpected Supabase sign-up failure', error)
+      return { error: 'Authentication is unavailable right now. Please try again.' }
     }
   }
 
