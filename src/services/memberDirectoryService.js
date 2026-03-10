@@ -5,6 +5,10 @@ const memberAccountsTable = 'member_accounts'
 const validRoles = new Set(['member', 'intercessor', 'pastor', 'prayer-core'])
 
 function normalizeRole(role) {
+  if (role === 'owner') {
+    return 'prayer-core'
+  }
+
   return validRoles.has(role) ? role : 'member'
 }
 

@@ -40,7 +40,7 @@ stable
 security definer
 set search_path = public
 as $$
-  select coalesce(
+  select case coalesce(
     (
       select member_accounts.role
       from public.member_accounts
@@ -51,7 +51,17 @@ as $$
     auth.jwt() -> 'user_metadata' ->> 'role',
     'member'
   )
+    when 'owner' then 'prayer-core'
+    when 'pastor' then 'pastor'
+    when 'intercessor' then 'intercessor'
+    when 'prayer-core' then 'prayer-core'
+    else 'member'
+  end
 $$;
+
+update public.member_accounts
+set role = 'prayer-core'
+where role = 'owner';
 
 create or replace function public.prayer_app_current_role()
 returns text

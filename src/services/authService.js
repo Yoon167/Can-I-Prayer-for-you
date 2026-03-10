@@ -82,6 +82,18 @@ function saveLocalAccounts(accounts) {
   window.localStorage.setItem(localAccountsStorageKey, JSON.stringify(accounts))
 }
 
+function normalizePrayerAppRole(role) {
+  if (role === 'owner') {
+    return 'prayer-core'
+  }
+
+  if (role === 'pastor' || role === 'intercessor' || role === 'prayer-core') {
+    return role
+  }
+
+  return 'member'
+}
+
 function mapAccountTypeToRole(accountType) {
   if (accountType === 'pastor') {
     return 'pastor'
@@ -137,8 +149,9 @@ function normalizeMemberProfile(profile) {
 
 function getMemberProfile(user) {
   const normalizedProfile = normalizeMemberProfile(user?.user_metadata?.memberProfile)
-  const resolvedRole =
-    user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(normalizedProfile.accountType)
+  const resolvedRole = normalizePrayerAppRole(
+    user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(normalizedProfile.accountType),
+  )
 
   return {
     ...normalizedProfile,
@@ -183,17 +196,18 @@ function buildSession(role, email, provider, memberProfile = normalizeMemberProf
 }
 
 function getSessionRole(session) {
-  return (
+  return normalizePrayerAppRole(
     session?.user?.app_metadata?.role ??
-    session?.user?.user_metadata?.role ??
-    mapAccountTypeToRole(getMemberProfile(session?.user).accountType)
+      session?.user?.user_metadata?.role ??
+      mapAccountTypeToRole(getMemberProfile(session?.user).accountType),
   )
 }
 
 async function syncSupabaseMemberContext(user) {
   const fallbackProfile = getMemberProfile(user)
-  const fallbackRole =
-    user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(fallbackProfile.accountType)
+  const fallbackRole = normalizePrayerAppRole(
+    user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(fallbackProfile.accountType),
+  )
 
   let memberAccount = null
 
@@ -204,7 +218,7 @@ async function syncSupabaseMemberContext(user) {
     memberAccount = null
   }
 
-  const resolvedRole = memberAccount?.role ?? fallbackRole
+  const resolvedRole = normalizePrayerAppRole(memberAccount?.role ?? fallbackRole)
   const mergedProfile = mergeMemberProfile(fallbackProfile, memberAccount, resolvedRole)
 
   try {
@@ -448,7 +462,9 @@ export async function savePrayerAppMemberProfile(profile, currentSession) {
     memberProfile: normalizedProfile,
   })
 
-  const sessionRole = savedAccount?.role ?? user.app_metadata?.role ?? mergedMetadata.role ?? null
+  const sessionRole = normalizePrayerAppRole(
+    savedAccount?.role ?? user.app_metadata?.role ?? mergedMetadata.role ?? null,
+  )
   const nextProfile = mergeMemberProfile(normalizedProfile, savedAccount, sessionRole ?? role)
 
   return {
