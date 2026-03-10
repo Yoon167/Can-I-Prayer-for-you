@@ -36,6 +36,36 @@
   margin-bottom: 0.35rem;
 }
 
+.app-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.app-logo-mark {
+  width: 3rem;
+  height: 3rem;
+  flex: 0 0 auto;
+  border-radius: 18px;
+  box-shadow: 0 12px 24px rgba(72, 48, 22, 0.14);
+}
+
+.app-logo-copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.app-logo-copy h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+  color: var(--color-ink);
+}
+
+.auth-logo {
+  margin-bottom: 1rem;
+}
+
 .app-navbar-links {
   display: flex;
   flex-wrap: wrap;
@@ -1165,6 +1195,14 @@
 
   .app-navbar-brand {
     display: none;
+  }
+
+  .auth-logo {
+    justify-content: center;
+  }
+
+  .app-logo-copy h2 {
+    font-size: 1.2rem;
   }
 
   .app-navbar-links {

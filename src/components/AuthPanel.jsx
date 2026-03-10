@@ -1,3 +1,5 @@
+import AppLogo from './AppLogo.jsx'
+
 function AuthPanel({
   authMode,
   email,
@@ -18,7 +20,7 @@ function AuthPanel({
     <main className="auth-shell">
       <section className="auth-panel">
         <div className="auth-copy">
-          <p className="eyebrow">Global prayer community</p>
+          <AppLogo className="auth-logo" />
           <h1>Pray with people everywhere, for His glory.</h1>
           <p className="auth-text">
             {providerConfigured

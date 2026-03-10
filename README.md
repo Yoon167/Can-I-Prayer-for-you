@@ -36,6 +36,20 @@ This repo already includes [deploy-pages.yml](.github/workflows/deploy-pages.yml
 
 You do not need `.env` or Supabase credentials for this publish path.
 
+## Replace the app logo later
+
+The live app now uses [public/brand-mark.svg](public/brand-mark.svg) as the main logo in the browser tab, auth screen, and app navigation.
+
+When your final logo is ready:
+
+1. Replace [public/brand-mark.svg](public/brand-mark.svg) with your final file using the same filename.
+2. If your logo is not an SVG, you can still use a PNG, but keep the same path and update the references in [index.html](index.html) and [src/components/AppLogo.jsx](src/components/AppLogo.jsx).
+3. Replace [public/social-preview.svg](public/social-preview.svg) if you want social sharing cards on WhatsApp, Facebook, or X to match the final brand.
+4. Run `npm run build`.
+5. Commit and push to `main` so GitHub Pages redeploys.
+
+If you want a different logo size or spacing in the app, adjust the logo styles in [src/App.css](src/App.css).
+
 ## Run locally
 
 ```bash

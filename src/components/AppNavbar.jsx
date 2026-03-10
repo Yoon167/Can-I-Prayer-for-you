@@ -1,3 +1,5 @@
+import AppLogo from './AppLogo.jsx'
+
 function NavIcon({ id, active }) {
   const strokeWidth = active ? 2.2 : 1.8
 
@@ -74,8 +76,7 @@ function AppNavbar({ currentView, onChangeView }) {
   return (
     <nav className="app-navbar" aria-label="Primary navigation">
       <div className="app-navbar-brand">
-        <p className="eyebrow">Global prayer community</p>
-        <h2>Can I Pray for You</h2>
+        <AppLogo compact />
       </div>
 
       <div className="app-navbar-links">
