@@ -246,6 +246,29 @@ function App() {
     }
   }
 
+  function getPrayerRequestSyncMessage(error) {
+    const normalizedError = error?.toLowerCase?.() ?? ''
+
+    if (
+      normalizedError.includes('prayer_requests') &&
+      (normalizedError.includes('does not exist') || normalizedError.includes('schema cache'))
+    ) {
+      return 'Shared request sync is unavailable. Run supabase/prayer_requests.sql in Supabase SQL Editor, then sign out and sign back in.'
+    }
+
+    if (
+      normalizedError.includes('row-level security') ||
+      normalizedError.includes('permission denied') ||
+      normalizedError.includes('forbidden')
+    ) {
+      return 'Shared request sync is blocked by Supabase permissions. Confirm the prayer_requests SQL finished successfully, then sign out and sign back in to refresh your role.'
+    }
+
+    return error
+      ? `Shared request sync is unavailable: ${error}`
+      : 'Shared request sync ran into a connection problem. The current screen will keep working locally.'
+  }
+
   useEffect(() => {
     window.localStorage.setItem(focusStorageKey, JSON.stringify(focusItems))
   }, [focusItems])
@@ -460,9 +483,7 @@ function App() {
       }
 
       if (error) {
-        setRequestSyncStatus(
-          'Shared request sync is unavailable. Run supabase/prayer_requests.sql in Supabase SQL Editor to create the prayer_requests table and enable multi-device requests.',
-        )
+        setRequestSyncStatus(getPrayerRequestSyncMessage(error))
         setRequestSyncTone('error')
         return
       }
@@ -482,14 +503,12 @@ function App() {
         setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
         setRequestSyncTone('neutral')
       },
-      () => {
+      (error) => {
         if (!isMounted) {
           return
         }
 
-        setRequestSyncStatus(
-          'Shared request sync ran into a connection problem. The current screen will keep working locally.',
-        )
+        setRequestSyncStatus(getPrayerRequestSyncMessage(error))
         setRequestSyncTone('error')
       },
     )
@@ -1405,17 +1424,15 @@ function App() {
 
     const { error } = await signOutOfPrayerApp()
 
-    if (error) {
-      setAuthError(error)
-      setAuthBusy(false)
-      return
-    }
-
     applyAuthSession(null)
     setSelectedRole('member')
     setMemberProfile(defaultMemberProfile)
     setMemberProfileForm(defaultMemberProfile)
     setMemberProfileStatus('')
+    setRequestSyncStatus('')
+    setRequestSyncTone('neutral')
+    setJournalSyncStatus('')
+    setJournalSyncTone('neutral')
     const fallbackTeaching = getFallbackTeaching()
     setHomeContent((currentContent) => ({
       ...currentContent,
@@ -1433,7 +1450,11 @@ function App() {
     setEmail('')
     setPassword('')
     setAuthError('')
-    setAuthNotice('')
+    setAuthNotice(
+      error
+        ? `Signed out on this device, but Supabase returned an error: ${error}`
+        : '',
+    )
     setCurrentView('home')
     setAuthBusy(false)
   }
