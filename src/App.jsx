@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import AnsweredPrayersPanel from './components/AnsweredPrayersPanel.jsx'
 import AppNavbar from './components/AppNavbar.jsx'
+import AppLoadingScreen from './components/AppLoadingScreen.jsx'
 import AuthPanel from './components/AuthPanel.jsx'
 import HeroPanel from './components/HeroPanel.jsx'
 import HomeView from './components/HomeView.jsx'
@@ -1410,15 +1411,7 @@ function App() {
   }
 
   if (!authReady) {
-    return (
-      <main className="auth-shell">
-        <section className="auth-panel auth-panel-loading">
-          <p className="eyebrow">Secure prayer workspace</p>
-          <h1>Checking your session...</h1>
-          <p className="auth-text">Restoring your authentication state and assigned role.</p>
-        </section>
-      </main>
-    )
+    return <AppLoadingScreen />
   }
 
   if (!authSession) {
