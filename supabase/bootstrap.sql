@@ -189,11 +189,14 @@ create table if not exists public.prayer_requests (
   submitted_by text not null default 'Prayer app',
   assigned_to text not null default 'Open team',
   follow_up_status text not null default 'none',
+  follow_up_messages jsonb not null default '[]'::jsonb,
   flagged_at text,
   prayed_at text,
   prayed_notice text not null default '',
   prayed_notified_at text,
   prayed_by text not null default '',
+  testimony_text text not null default '',
+  testimony_shared boolean not null default false,
   created_at timestamptz not null default timezone('utc', now())
 );
 
@@ -211,11 +214,14 @@ alter table public.prayer_requests
   add column if not exists submitted_by text not null default 'Prayer app',
   add column if not exists assigned_to text not null default 'Open team',
   add column if not exists follow_up_status text not null default 'none',
+  add column if not exists follow_up_messages jsonb not null default '[]'::jsonb,
   add column if not exists flagged_at text,
   add column if not exists prayed_at text,
   add column if not exists prayed_notice text not null default '',
   add column if not exists prayed_notified_at text,
   add column if not exists prayed_by text not null default '',
+  add column if not exists testimony_text text not null default '',
+  add column if not exists testimony_shared boolean not null default false,
   add column if not exists created_at timestamptz not null default timezone('utc', now());
 
 update public.prayer_requests
@@ -265,6 +271,10 @@ begin
     raise exception 'Invalid follow_up_status: %', new.follow_up_status;
   end if;
 
+  if jsonb_typeof(new.follow_up_messages) <> 'array' then
+    raise exception 'follow_up_messages must be a JSON array.';
+  end if;
+
   if actor_role not in ('intercessor', 'pastor', 'prayer-core') then
     if actor_id is null or actor_id <> old.owner_user_id then
       raise exception 'Your role is not allowed to change prayer workflow records.';
@@ -277,16 +287,24 @@ begin
       or new.confidentiality is distinct from old.confidentiality
       or new.submitted_by is distinct from old.submitted_by
       or new.assigned_to is distinct from old.assigned_to
+      or new.follow_up_status is distinct from old.follow_up_status
       or new.flagged_at is distinct from old.flagged_at
       or new.prayed_at is distinct from old.prayed_at
       or new.prayed_notice is distinct from old.prayed_notice
       or new.prayed_notified_at is distinct from old.prayed_notified_at
       or new.prayed_by is distinct from old.prayed_by
       or new.visibility_scope is distinct from old.visibility_scope
-      or new.follow_up_status is distinct from old.follow_up_status
       or new.owner_user_id is distinct from old.owner_user_id
     then
       raise exception 'Members can only mark their own requests answered.';
+    end if;
+
+    if new.follow_up_messages is distinct from old.follow_up_messages then
+      return new;
+    end if;
+
+    if new.testimony_text is distinct from old.testimony_text or new.testimony_shared is distinct from old.testimony_shared then
+      return new;
     end if;
 
     if new.workflow_status not in (old.workflow_status, 'answered') then

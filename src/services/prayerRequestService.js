@@ -2,7 +2,7 @@ import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
 import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
 
 const prayerRequestsTable = 'prayer_requests'
-const prayerRequestSelectColumns = 'id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, owner_user_id, visibility_scope, follow_up_status, prayed_notice, prayed_notified_at, prayed_by, created_at'
+const prayerRequestSelectColumns = 'id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, owner_user_id, visibility_scope, follow_up_status, follow_up_messages, prayed_notice, prayed_notified_at, prayed_by, testimony_text, testimony_shared, created_at'
 const legacyPrayerRequestSelectColumns = 'id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at'
 
 function isLegacyPrayerRequestSchemaError(error) {
@@ -12,10 +12,31 @@ function isLegacyPrayerRequestSchemaError(error) {
     message.includes('owner_user_id') ||
     message.includes('visibility_scope') ||
     message.includes('follow_up_status') ||
+    message.includes('follow_up_messages') ||
     message.includes('prayed_notice') ||
     message.includes('prayed_notified_at') ||
-    message.includes('prayed_by')
+    message.includes('prayed_by') ||
+    message.includes('testimony_text') ||
+    message.includes('testimony_shared')
   )
+}
+
+function normalizeFollowUpMessages(messages) {
+  if (!Array.isArray(messages)) {
+    return []
+  }
+
+  return messages
+    .filter((message) => message && typeof message === 'object')
+    .map((message) => ({
+      id: message.id ?? '',
+      text: message.text ?? '',
+      authorName: message.authorName ?? 'Prayer team',
+      authorRole: message.authorRole ?? 'Member',
+      senderType: message.senderType ?? 'team',
+      createdAt: message.createdAt ?? null,
+    }))
+    .filter((message) => message.text)
 }
 
 function normalizePrayerRequestRow(row) {
@@ -39,9 +60,12 @@ function normalizePrayerRequestRow(row) {
       row.visibility_scope ??
       ((row.confidentiality ?? '').toLowerCase().includes('pastoral') ? 'pastoral' : 'team'),
     followUpStatus: row.follow_up_status ?? 'none',
+    followUpMessages: normalizeFollowUpMessages(row.follow_up_messages),
     prayedNotice: row.prayed_notice ?? '',
     prayedNotifiedAt: row.prayed_notified_at ?? null,
     prayedBy: row.prayed_by ?? '',
+    testimonyText: row.testimony_text ?? '',
+    testimonyShared: Boolean(row.testimony_shared),
   }
 }
 
@@ -67,9 +91,12 @@ function buildPrayerRequestPayload(item, includeAdvancedFields = true) {
     payload.owner_user_id = item.ownerUserId ?? null
     payload.visibility_scope = item.visibilityScope ?? 'team'
     payload.follow_up_status = item.followUpStatus ?? 'none'
+    payload.follow_up_messages = item.followUpMessages ?? []
     payload.prayed_notice = item.prayedNotice ?? ''
     payload.prayed_notified_at = item.prayedNotifiedAt ?? null
     payload.prayed_by = item.prayedBy ?? ''
+    payload.testimony_text = item.testimonyText ?? ''
+    payload.testimony_shared = item.testimonyShared ?? false
   }
 
   return payload
@@ -168,9 +195,12 @@ export async function updatePrayerRequest(itemId, updates) {
     ownerUserId: updates.ownerUserId ?? null,
     visibilityScope: updates.visibilityScope ?? 'team',
     followUpStatus: updates.followUpStatus ?? 'none',
+    followUpMessages: updates.followUpMessages ?? [],
     prayedNotice: updates.prayedNotice ?? '',
     prayedNotifiedAt: updates.prayedNotifiedAt ?? null,
     prayedBy: updates.prayedBy ?? '',
+    testimonyText: updates.testimonyText ?? '',
+    testimonyShared: updates.testimonyShared ?? false,
   })
 
   delete payload.id

@@ -213,6 +213,8 @@ function App() {
   const [lastDeckAction, setLastDeckAction] = useState('')
   const [swipeOffset, setSwipeOffset] = useState(0)
   const [deferredQueueIds, setDeferredQueueIds] = useState([])
+  const [followUpDrafts, setFollowUpDrafts] = useState({})
+  const [testimonyDrafts, setTestimonyDrafts] = useState({})
   const requestInputRef = useRef(null)
   const journalTitleRef = useRef(null)
   const swipeStartXRef = useRef(null)
@@ -334,9 +336,12 @@ function App() {
         ownerUserId: focusItem.ownerUserId,
         visibilityScope: focusItem.visibilityScope,
         followUpStatus: focusItem.followUpStatus,
+        followUpMessages: focusItem.followUpMessages,
         prayedNotice: focusItem.prayedNotice,
         prayedNotifiedAt: focusItem.prayedNotifiedAt,
         prayedBy: focusItem.prayedBy,
+        testimonyText: focusItem.testimonyText,
+        testimonyShared: focusItem.testimonyShared,
       },
       ...currentItems,
     ])
@@ -362,6 +367,134 @@ function App() {
       prayedNotice: `${memberDisplayName} and the intercessory team prayed for this request.`,
       prayedNotifiedAt: prayedAt,
     }
+  }
+
+  function updateFocusItemLocally(itemId, updater) {
+    setFocusItems((currentItems) =>
+      currentItems.map((item) => (item.id === itemId ? updater(item) : item)),
+    )
+  }
+
+  function handleFollowUpDraftChange(itemId, value) {
+    setFollowUpDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [itemId]: value,
+    }))
+  }
+
+  async function handleAddFollowUpMessage(itemId) {
+    const selectedItem = focusItems.find((item) => item.id === itemId)
+    const trimmedMessage = followUpDrafts[itemId]?.trim() ?? ''
+
+    if (!selectedItem || !trimmedMessage) {
+      return
+    }
+
+    const nextMessage = {
+      id: createId('follow-up'),
+      text: trimmedMessage,
+      authorName: memberDisplayName,
+      authorRole: activeRoleConfig.label,
+      senderType: selectedItem.ownerUserId === authSession?.userId ? 'requester' : 'team',
+      createdAt: formatAnsweredDate(),
+    }
+
+    const nextItem = {
+      ...selectedItem,
+      followUpStatus: 'requested',
+      followUpMessages: [...(selectedItem.followUpMessages ?? []), nextMessage],
+    }
+
+    if (sharedPrayerRequestsEnabled) {
+      const { item, error } = await updatePrayerRequest(itemId, nextItem)
+
+      if (error) {
+        if (isTransientSupabaseError(error)) {
+          updateFocusItemLocally(itemId, () => nextItem)
+          setFollowUpDrafts((currentDrafts) => ({
+            ...currentDrafts,
+            [itemId]: '',
+          }))
+          setRequestSyncStatus('Supabase is unreachable right now, so the follow-up message was saved only on this device.')
+          setRequestSyncTone('neutral')
+          return
+        }
+
+        setRequestSyncStatus(`Unable to send the follow-up message: ${error}`)
+        setRequestSyncTone('error')
+        return
+      }
+
+      updateFocusItemLocally(itemId, () => item)
+      setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
+      setRequestSyncTone('neutral')
+    } else {
+      updateFocusItemLocally(itemId, () => nextItem)
+    }
+
+    setFollowUpDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [itemId]: '',
+    }))
+  }
+
+  function handleTestimonyDraftChange(itemId, value) {
+    setTestimonyDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [itemId]: {
+        ...(currentDrafts[itemId] ?? {}),
+        text: value,
+      },
+    }))
+  }
+
+  function handleTestimonyShareChange(itemId, shared) {
+    setTestimonyDrafts((currentDrafts) => ({
+      ...currentDrafts,
+      [itemId]: {
+        ...(currentDrafts[itemId] ?? {}),
+        shared,
+      },
+    }))
+  }
+
+  async function handleSaveTestimony(itemId) {
+    const selectedItem = focusItems.find((item) => item.id === itemId)
+
+    if (!selectedItem) {
+      return
+    }
+
+    const nextDraft = testimonyDrafts[itemId] ?? {}
+    const nextItem = {
+      ...selectedItem,
+      testimonyText: nextDraft.text ?? selectedItem.testimonyText ?? '',
+      testimonyShared: nextDraft.shared ?? selectedItem.testimonyShared ?? false,
+    }
+
+    if (sharedPrayerRequestsEnabled) {
+      const { item, error } = await updatePrayerRequest(itemId, nextItem)
+
+      if (error) {
+        if (isTransientSupabaseError(error)) {
+          updateFocusItemLocally(itemId, () => nextItem)
+          setRequestSyncStatus('Supabase is unreachable right now, so the testimony was saved only on this device.')
+          setRequestSyncTone('neutral')
+          return
+        }
+
+        setRequestSyncStatus(`Unable to save this testimony: ${error}`)
+        setRequestSyncTone('error')
+        return
+      }
+
+      updateFocusItemLocally(itemId, () => item)
+      setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
+      setRequestSyncTone('neutral')
+      return
+    }
+
+    updateFocusItemLocally(itemId, () => nextItem)
   }
 
   useEffect(() => {
@@ -1011,9 +1144,12 @@ function App() {
       ownerUserId: authSession?.userId ?? null,
       visibilityScope: requestVisibilityScope,
       followUpStatus: 'none',
+      followUpMessages: [],
       prayedNotice: '',
       prayedNotifiedAt: null,
       prayedBy: '',
+      testimonyText: '',
+      testimonyShared: false,
     }
 
     if (sharedPrayerRequestsEnabled) {
@@ -1476,6 +1612,19 @@ function App() {
     const nextItem = {
       ...selectedItem,
       followUpStatus: selectedItem.followUpStatus === 'requested' ? 'none' : 'requested',
+      followUpMessages:
+        selectedItem.followUpStatus === 'requested' || (selectedItem.followUpMessages?.length ?? 0) > 0
+          ? selectedItem.followUpMessages ?? []
+          : [
+              {
+                id: createId('follow-up'),
+                text: `${memberDisplayName} requested a follow-up update on this prayer request.`,
+                authorName: memberDisplayName,
+                authorRole: activeRoleConfig.label,
+                senderType: 'team',
+                createdAt: formatAnsweredDate(),
+              },
+            ],
     }
 
     if (sharedPrayerRequestsEnabled) {
@@ -2083,6 +2232,9 @@ function App() {
               handleToggleFocusItem={handleToggleFocusItem}
               handleMarkAnswered={handleMarkAnswered}
               handleToggleFollowUp={handleToggleFollowUp}
+              followUpDrafts={followUpDrafts}
+              handleFollowUpDraftChange={handleFollowUpDraftChange}
+              handleAddFollowUpMessage={handleAddFollowUpMessage}
               handleRemoveFocusItem={handleRemoveFocusItem}
               requestSyncStatus={effectiveRequestSyncStatus}
               requestSyncTone={effectiveRequestSyncTone}
@@ -2091,8 +2243,14 @@ function App() {
             />
             <AnsweredPrayersPanel
               answeredFocusItems={answeredFocusItems}
+              authUserId={authSession.userId}
+              canManagePrayerWorkflow={canManagePrayerWorkflow}
               handleRestoreAnswered={handleRestoreAnswered}
               handleAnsweredNoteChange={handleAnsweredNoteChange}
+              testimonyDrafts={testimonyDrafts}
+              handleTestimonyDraftChange={handleTestimonyDraftChange}
+              handleTestimonyShareChange={handleTestimonyShareChange}
+              handleSaveTestimony={handleSaveTestimony}
             />
             <JournalPanel
               journalItems={journalItems}
@@ -2145,8 +2303,14 @@ function App() {
       {currentView === 'praises' ? (
         <PraisesView
           answeredFocusItems={answeredFocusItems}
+          authUserId={authSession.userId}
+          canManagePrayerWorkflow={canManagePrayerWorkflow}
           handleRestoreAnswered={handleRestoreAnswered}
           handleAnsweredNoteChange={handleAnsweredNoteChange}
+          testimonyDrafts={testimonyDrafts}
+          handleTestimonyDraftChange={handleTestimonyDraftChange}
+          handleTestimonyShareChange={handleTestimonyShareChange}
+          handleSaveTestimony={handleSaveTestimony}
           prayedDeckItems={effectivePrayedDeckItems}
         />
       ) : null}

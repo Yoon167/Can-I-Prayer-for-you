@@ -1,12 +1,29 @@
 import AnsweredPrayersPanel from './AnsweredPrayersPanel.jsx'
 
-function PraisesView({ answeredFocusItems, handleRestoreAnswered, handleAnsweredNoteChange, prayedDeckItems }) {
+function PraisesView({
+  answeredFocusItems,
+  authUserId,
+  canManagePrayerWorkflow,
+  handleRestoreAnswered,
+  handleAnsweredNoteChange,
+  testimonyDrafts,
+  handleTestimonyDraftChange,
+  handleTestimonyShareChange,
+  handleSaveTestimony,
+  prayedDeckItems,
+}) {
   return (
     <section className="content-grid">
       <AnsweredPrayersPanel
         answeredFocusItems={answeredFocusItems}
+        authUserId={authUserId}
+        canManagePrayerWorkflow={canManagePrayerWorkflow}
         handleRestoreAnswered={handleRestoreAnswered}
         handleAnsweredNoteChange={handleAnsweredNoteChange}
+        testimonyDrafts={testimonyDrafts}
+        handleTestimonyDraftChange={handleTestimonyDraftChange}
+        handleTestimonyShareChange={handleTestimonyShareChange}
+        handleSaveTestimony={handleSaveTestimony}
       />
 
       <article className="panel">
@@ -30,6 +47,7 @@ function PraisesView({ answeredFocusItems, handleRestoreAnswered, handleAnswered
                 <p className="praise-meta-line">
                   Requested by <strong>{item.isAnonymous ? 'Anonymous member' : item.requestedBy}</strong>
                 </p>
+                {item.prayedNotice ? <p className="request-owner-status">{item.prayedNotice}</p> : null}
               </section>
             ))}
           </div>

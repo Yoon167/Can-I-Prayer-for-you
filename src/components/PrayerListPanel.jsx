@@ -17,6 +17,9 @@ function PrayerListPanel({
   handleToggleFocusItem,
   handleMarkAnswered,
   handleToggleFollowUp,
+  followUpDrafts,
+  handleFollowUpDraftChange,
+  handleAddFollowUpMessage,
   handleRemoveFocusItem,
   requestSyncStatus,
   requestSyncTone,
@@ -148,6 +151,54 @@ function PrayerListPanel({
                   Prayed {item.prayedAt}
                   {item.prayedBy ? ` by ${item.prayedBy}` : ''}.
                 </p>
+              ) : null}
+              {item.followUpStatus === 'requested' || (item.followUpMessages?.length ?? 0) > 0 ? (
+                <div className="follow-up-thread">
+                  <p className="follow-up-label">Follow-up chat</p>
+                  {(item.followUpMessages ?? []).length === 0 ? (
+                    <p className="request-owner-status">No follow-up replies yet.</p>
+                  ) : (
+                    <div className="follow-up-message-list">
+                      {(item.followUpMessages ?? []).map((message) => (
+                        <section
+                          key={message.id}
+                          className={
+                            message.senderType === 'requester'
+                              ? 'follow-up-message follow-up-message-requester'
+                              : 'follow-up-message'
+                          }
+                        >
+                          <p className="moment-time">
+                            {message.authorName} • {message.authorRole}
+                          </p>
+                          <p>{message.text}</p>
+                          {message.createdAt ? <p className="moment-time">{message.createdAt}</p> : null}
+                        </section>
+                      ))}
+                    </div>
+                  )}
+                  <div className="follow-up-entry">
+                    <textarea
+                      className="answered-note-input"
+                      value={followUpDrafts[item.id] ?? ''}
+                      onChange={(event) => handleFollowUpDraftChange(item.id, event.target.value)}
+                      placeholder={
+                        item.ownerUserId === authUserId
+                          ? 'Reply with an update, new need, or answered report.'
+                          : 'Send a follow-up prayer note to the requester.'
+                      }
+                      rows="3"
+                    />
+                    <button
+                      type="button"
+                      className="form-action"
+                      onClick={() => handleAddFollowUpMessage(item.id)}
+                      disabled={!(followUpDrafts[item.id] ?? '').trim()}
+                    >
+                      Send reply
+                    </button>
+                  </div>
+                </div>
               ) : null}
             </div>
             <div className="focus-actions">
