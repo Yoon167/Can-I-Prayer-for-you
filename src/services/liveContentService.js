@@ -1,5 +1,49 @@
 import { getDailyHomeContent } from '../data/dailyContent.js'
 
+const dailyDevotionCacheStorageKey = 'prayer-app-daily-devotion-cache'
+
+function getTodayCacheKey() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function readCachedDevotion() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(dailyDevotionCacheStorageKey)
+
+    if (!storedValue) {
+      return null
+    }
+
+    const parsedValue = JSON.parse(storedValue)
+
+    if (parsedValue?.cacheKey !== getTodayCacheKey() || !parsedValue?.devotion) {
+      return null
+    }
+
+    return parsedValue.devotion
+  } catch {
+    return null
+  }
+}
+
+function writeCachedDevotion(devotion) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(
+    dailyDevotionCacheStorageKey,
+    JSON.stringify({
+      cacheKey: getTodayCacheKey(),
+      devotion,
+    }),
+  )
+}
+
 function buildFallbackContent() {
   const { devotion, teaching } = getDailyHomeContent()
 
@@ -20,9 +64,19 @@ function buildFallbackContent() {
 }
 
 async function fetchDailyDevotion() {
+  const cachedDevotion = readCachedDevotion()
+
+  if (cachedDevotion) {
+    return cachedDevotion
+  }
+
   const response = await fetch('https://beta.ourmanna.com/api/v1/get?format=json&order=daily')
 
   if (!response.ok) {
+    if (response.status === 429) {
+      throw new Error('Daily devotion feed is rate-limited right now.')
+    }
+
     throw new Error('Unable to load the daily devotion feed.')
   }
 
@@ -33,7 +87,7 @@ async function fetchDailyDevotion() {
     throw new Error('Daily devotion feed returned an incomplete payload.')
   }
 
-  return {
+  const devotion = {
     title: 'Daily verse and devotion',
     scripture: `${details.reference}${details.version ? ` • ${details.version}` : ''}`,
     summary: details.text,
@@ -42,6 +96,10 @@ async function fetchDailyDevotion() {
     isLive: true,
     link: details.verseurl ?? null,
   }
+
+  writeCachedDevotion(devotion)
+
+  return devotion
 }
 
 export async function getLiveHomeContent() {

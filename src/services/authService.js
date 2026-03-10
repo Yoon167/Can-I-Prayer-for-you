@@ -2,6 +2,57 @@ import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js'
 import { formatAnsweredDate } from '../utils/prayerAppUtils.js'
 
 const localAccountsStorageKey = 'prayer-app-local-accounts'
+const authRateLimitStorageKey = 'prayer-app-auth-rate-limit-until'
+const authRateLimitCooldownMs = 60 * 1000
+
+function getAuthRateLimitUntil() {
+  if (typeof window === 'undefined') {
+    return 0
+  }
+
+  const storedValue = window.localStorage.getItem(authRateLimitStorageKey)
+  const nextAllowedAt = Number(storedValue)
+
+  return Number.isFinite(nextAllowedAt) ? nextAllowedAt : 0
+}
+
+function setAuthRateLimitCooldown() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(authRateLimitStorageKey, String(Date.now() + authRateLimitCooldownMs))
+}
+
+function clearAuthRateLimitCooldown() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.removeItem(authRateLimitStorageKey)
+}
+
+function getAuthRateLimitMessage() {
+  const remainingMs = getAuthRateLimitUntil() - Date.now()
+  const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000))
+
+  return `Too many sign-in attempts right now. Please wait ${remainingSeconds} seconds and try again.`
+}
+
+function isRateLimitError(error) {
+  const message = error?.message?.toLowerCase?.() ?? ''
+
+  return error?.status === 429 || message.includes('rate limit') || message.includes('too many requests')
+}
+
+function normalizeSupabaseAuthError(error) {
+  if (isRateLimitError(error)) {
+    setAuthRateLimitCooldown()
+    return getAuthRateLimitMessage()
+  }
+
+  return error?.message ?? 'Authentication is unavailable right now.'
+}
 
 function loadLocalAccounts() {
   if (typeof window === 'undefined') {
@@ -100,14 +151,20 @@ export async function signInToPrayerApp({ email, password }) {
       return { error: 'Enter your email and password to continue.' }
     }
 
+    if (getAuthRateLimitUntil() > Date.now()) {
+      return { error: getAuthRateLimitMessage() }
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     })
 
     if (error) {
-      return { error: error.message }
+      return { error: normalizeSupabaseAuthError(error) }
     }
+
+    clearAuthRateLimitCooldown()
 
     const sessionRole = getSessionRole(data.session)
     const memberProfile = getMemberProfile(data.user)
@@ -155,6 +212,10 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
   }
 
   if (isSupabaseConfigured && supabase) {
+    if (getAuthRateLimitUntil() > Date.now()) {
+      return { error: getAuthRateLimitMessage() }
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
@@ -167,8 +228,10 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
     })
 
     if (error) {
-      return { error: error.message }
+      return { error: normalizeSupabaseAuthError(error) }
     }
+
+    clearAuthRateLimitCooldown()
 
     if (!data.session) {
       return {
