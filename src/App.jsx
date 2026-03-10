@@ -304,7 +304,7 @@ function App() {
           return
         }
 
-        console.error('Unable to restore Supabase session', error)
+        console.error('Unable to restore session from Supabase', error)
         setAuthError('Unable to restore session. Please sign in.')
       } finally {
         if (isMounted) {
