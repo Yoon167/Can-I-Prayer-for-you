@@ -201,7 +201,7 @@ create table if not exists public.prayer_requests (
 );
 
 alter table public.prayer_requests
-  add column if not exists owner_user_id uuid not null default auth.uid(),
+  add column if not exists owner_user_id uuid default auth.uid(),
   add column if not exists completed boolean not null default false,
   add column if not exists answered_at text,
   add column if not exists answered_note text not null default '',
@@ -223,6 +223,22 @@ alter table public.prayer_requests
   add column if not exists testimony_text text not null default '',
   add column if not exists testimony_shared boolean not null default false,
   add column if not exists created_at timestamptz not null default timezone('utc', now());
+
+alter table public.prayer_requests
+  alter column owner_user_id set default auth.uid();
+
+do $$
+begin
+  if not exists (
+    select 1
+    from public.prayer_requests
+    where owner_user_id is null
+  ) then
+    alter table public.prayer_requests
+      alter column owner_user_id set not null;
+  end if;
+end;
+$$;
 
 update public.prayer_requests
 set visibility_scope = case

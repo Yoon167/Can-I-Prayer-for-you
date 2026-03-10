@@ -39,7 +39,7 @@ That single script creates:
 - workflow and timestamp triggers
 - one starter daily teaching for today so the home page has live teaching content immediately
 
-If shared requests are the only thing you need to repair, you can run [supabase/prayer_requests.sql](supabase/prayer_requests.sql) by itself. That script creates the `prayer_requests` table, updates older schemas, and adds the table to `supabase_realtime` for live multi-device updates.
+If you already ran an older prayer-request-only script before, run [supabase/bootstrap.sql](supabase/bootstrap.sql) again now. The live app expects newer columns such as `owner_user_id`, `visibility_scope`, `follow_up_status`, and `testimony_shared`, and the full bootstrap script is the authoritative upgrade path.
 
 ## 4. Add GitHub build secrets
 

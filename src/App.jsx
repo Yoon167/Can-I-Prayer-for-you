@@ -275,7 +275,7 @@ function App() {
       normalizedError.includes('prayer_requests') &&
       (normalizedError.includes('does not exist') || normalizedError.includes('schema cache'))
     ) {
-      return 'Shared request sync is unavailable. Run supabase/prayer_requests.sql in Supabase SQL Editor, then sign out and sign back in.'
+      return 'Shared request sync is unavailable because your Supabase project is missing the latest prayer request columns. Run supabase/bootstrap.sql in Supabase SQL Editor, then sign out and sign back in.'
     }
 
     if (
@@ -283,7 +283,7 @@ function App() {
       normalizedError.includes('permission denied') ||
       normalizedError.includes('forbidden')
     ) {
-      return 'Shared request sync is blocked by Supabase permissions. Confirm the prayer_requests SQL finished successfully, then sign out and sign back in to refresh your role.'
+      return 'Shared request sync is blocked by Supabase permissions. Confirm supabase/bootstrap.sql finished successfully, then sign out and sign back in to refresh your role.'
     }
 
     return error
