@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
+import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
 
 const memberAccountsTable = 'member_accounts'
 const validRoles = new Set(['member', 'intercessor', 'pastor', 'prayer-core'])
@@ -47,19 +48,23 @@ export async function getMemberAccount(userId) {
     return { item: null, error: null }
   }
 
-  const { data, error } = await supabase
-    .from(memberAccountsTable)
-    .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
-    .eq('user_id', userId)
-    .maybeSingle()
+  try {
+    const { data, error } = await supabase
+      .from(memberAccountsTable)
+      .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
+      .eq('user_id', userId)
+      .maybeSingle()
 
-  if (error) {
-    return { item: null, error: error.message }
-  }
+    if (error) {
+      return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
+    }
 
-  return {
-    item: data ? normalizeMemberAccountRow(data) : null,
-    error: null,
+    return {
+      item: data ? normalizeMemberAccountRow(data) : null,
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
   }
 }
 
@@ -68,19 +73,23 @@ export async function upsertMemberAccount(memberAccount) {
     return { item: memberAccount, error: null }
   }
 
-  const { data, error } = await supabase
-    .from(memberAccountsTable)
-    .upsert(buildMemberAccountPayload(memberAccount), { onConflict: 'user_id' })
-    .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from(memberAccountsTable)
+      .upsert(buildMemberAccountPayload(memberAccount), { onConflict: 'user_id' })
+      .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
+      .single()
 
-  if (error) {
-    return { item: null, error: error.message }
-  }
+    if (error) {
+      return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
+    }
 
-  return {
-    item: normalizeMemberAccountRow(data),
-    error: null,
+    return {
+      item: normalizeMemberAccountRow(data),
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
   }
 }
 
@@ -89,18 +98,22 @@ export async function listMemberAccounts() {
     return { items: [], error: null }
   }
 
-  const { data, error } = await supabase
-    .from(memberAccountsTable)
-    .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
-    .order('updated_at', { ascending: false })
+  try {
+    const { data, error } = await supabase
+      .from(memberAccountsTable)
+      .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
+      .order('updated_at', { ascending: false })
 
-  if (error) {
-    return { items: [], error: error.message }
-  }
+    if (error) {
+      return { items: [], error: normalizeSupabaseSyncError(error, 'registered members') }
+    }
 
-  return {
-    items: data.map(normalizeMemberAccountRow),
-    error: null,
+    return {
+      items: data.map(normalizeMemberAccountRow),
+      error: null,
+    }
+  } catch (error) {
+    return { items: [], error: normalizeSupabaseSyncError(error, 'registered members') }
   }
 }
 
@@ -109,19 +122,23 @@ export async function updateMemberAccountRole(userId, role) {
     return { item: { userId, role: normalizeRole(role) }, error: null }
   }
 
-  const { data, error } = await supabase
-    .from(memberAccountsTable)
-    .update({ role: normalizeRole(role) })
-    .eq('user_id', userId)
-    .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from(memberAccountsTable)
+      .update({ role: normalizeRole(role) })
+      .eq('user_id', userId)
+      .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
+      .single()
 
-  if (error) {
-    return { item: null, error: error.message }
-  }
+    if (error) {
+      return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
+    }
 
-  return {
-    item: normalizeMemberAccountRow(data),
-    error: null,
+    return {
+      item: normalizeMemberAccountRow(data),
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
   }
 }

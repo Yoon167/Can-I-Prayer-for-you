@@ -304,6 +304,16 @@ function App() {
       : 'Daily teaching sync is unavailable right now, so the app is using the local teaching fallback.'
   }
 
+  function getMemberDirectorySyncMessage(error) {
+    if (isTransientSupabaseError(error)) {
+      return 'Registered members are temporarily unavailable until Supabase reconnects.'
+    }
+
+    return error
+      ? `Unable to load registered members: ${error}`
+      : 'Registered members are unavailable right now.'
+  }
+
   function addPrayerRequestToLocalDeck(focusItem, requesterName) {
     setPrayerQueue((currentItems) => [
       {
@@ -763,8 +773,8 @@ function App() {
     const { items, error } = await listMemberAccounts()
 
     if (error) {
-      setMemberDirectoryStatus(`Unable to load registered members: ${error}`)
-      setMemberDirectoryTone('error')
+      setMemberDirectoryStatus(getMemberDirectorySyncMessage(error))
+      setMemberDirectoryTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
       setMemberDirectoryBusy(false)
       return
     }
@@ -785,8 +795,12 @@ function App() {
     const { item, error } = await updateMemberAccountRole(userId, nextRole)
 
     if (error) {
-      setMemberDirectoryStatus(`Unable to update this member role: ${error}`)
-      setMemberDirectoryTone('error')
+      setMemberDirectoryStatus(
+        isTransientSupabaseError(error)
+          ? 'Supabase is unreachable right now, so member roles cannot be changed until the connection returns.'
+          : `Unable to update this member role: ${error}`,
+      )
+      setMemberDirectoryTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
       setMemberDirectoryBusy(false)
       return
     }
@@ -844,8 +858,8 @@ function App() {
       }
 
       if (error) {
-        setMemberDirectoryStatus(`Unable to load registered members: ${error}`)
-        setMemberDirectoryTone('error')
+        setMemberDirectoryStatus(getMemberDirectorySyncMessage(error))
+        setMemberDirectoryTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
         setMemberDirectoryBusy(false)
         return
       }
