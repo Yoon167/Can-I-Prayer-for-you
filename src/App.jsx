@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import './App.css'
 import AnsweredPrayersPanel from './components/AnsweredPrayersPanel.jsx'
 import AnalyticsDashboard from './components/AnalyticsDashboard.jsx'
@@ -82,19 +82,69 @@ import {
   normalizePrayerDeck,
 } from './utils/prayerAppUtils.js'
 
+function normalizeLegacyRole(role) {
+  if (role === 'owner') {
+    return 'prayer-core'
+  }
+
+  return role
+}
+
+function normalizeStoredMemberProfile(profile, defaultMemberProfile) {
+  if (!profile || typeof profile !== 'object') {
+    return defaultMemberProfile
+  }
+
+  return {
+    fullName: profile.fullName ?? '',
+    displayName: profile.displayName ?? '',
+    phone: profile.phone ?? '',
+    address: profile.address ?? '',
+    churchName: profile.churchName ?? '',
+    pastorName: profile.pastorName ?? '',
+    bio: profile.bio ?? '',
+    accountType:
+      profile.accountType === 'owner'
+        ? 'owner'
+        : profile.accountType === 'pastor'
+          ? 'pastor'
+          : 'member',
+    avatarUrl: profile.avatarUrl ?? '',
+  }
+}
+
+function normalizeStoredAuthSession(session, roleOptions, defaultMemberProfile) {
+  if (!session || typeof session !== 'object') {
+    return null
+  }
+
+  const normalizedRole = normalizeLegacyRole(session.role)
+
+  if (!roleOptions.some((role) => role.id === normalizedRole)) {
+    return null
+  }
+
+  return {
+    ...session,
+    role: normalizedRole,
+    memberProfile: normalizeStoredMemberProfile(session.memberProfile, defaultMemberProfile),
+  }
+}
+
+const defaultMemberProfile = {
+  fullName: '',
+  displayName: '',
+  phone: '',
+  address: '',
+  churchName: '',
+  pastorName: '',
+  bio: '',
+  accountType: 'member',
+  avatarUrl: '',
+}
+
 function App() {
   const currentBuildId = import.meta.env.VITE_APP_BUILD_ID || 'dev-local'
-  const defaultMemberProfile = {
-    fullName: '',
-    displayName: '',
-    phone: '',
-    address: '',
-    churchName: '',
-    pastorName: '',
-    bio: '',
-    accountType: 'member',
-    avatarUrl: '',
-  }
   const [authReady, setAuthReady] = useState(() => !isSupabaseConfigured)
   const [authSession, setAuthSession] = useState(() => {
     if (typeof window === 'undefined') {
@@ -108,8 +158,7 @@ function App() {
     }
 
     try {
-      const parsedSession = JSON.parse(storedSession)
-      return roleOptions.some((role) => role.id === parsedSession.role) ? parsedSession : null
+      return normalizeStoredAuthSession(JSON.parse(storedSession), roleOptions, defaultMemberProfile)
     } catch {
       return null
     }
@@ -120,7 +169,8 @@ function App() {
     }
 
     const storedRole = window.localStorage.getItem(roleStorageKey)
-    return roleOptions.some((role) => role.id === storedRole) ? storedRole : roleOptions[0].id
+    const normalizedRole = normalizeLegacyRole(storedRole)
+    return roleOptions.some((role) => role.id === normalizedRole) ? normalizedRole : roleOptions[0].id
   })
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -157,26 +207,10 @@ function App() {
     }
 
     try {
-      const parsedProfile = JSON.parse(storedProfile)
-
-      if (parsedProfile && typeof parsedProfile === 'object') {
-        return {
-          fullName: parsedProfile.fullName ?? '',
-          displayName: parsedProfile.displayName ?? '',
-          phone: parsedProfile.phone ?? '',
-          address: parsedProfile.address ?? '',
-          churchName: parsedProfile.churchName ?? '',
-          pastorName: parsedProfile.pastorName ?? '',
-          bio: parsedProfile.bio ?? '',
-          accountType: parsedProfile.accountType ?? 'member',
-          avatarUrl: parsedProfile.avatarUrl ?? '',
-        }
-      }
+      return normalizeStoredMemberProfile(JSON.parse(storedProfile), defaultMemberProfile)
     } catch {
       return defaultMemberProfile
     }
-
-    return defaultMemberProfile
   })
   const [focusFilter, setFocusFilter] = useState('all')
   const [requestText, setRequestText] = useState('')
@@ -223,14 +257,18 @@ function App() {
   const swipePointerIdRef = useRef(null)
   const authUserId = authSession?.userId ?? ''
 
-  function applyAuthSession(session) {
-    setAuthSession(session)
+  const applyAuthSession = useCallback((session) => {
+    const normalizedSession = session
+      ? normalizeStoredAuthSession(session, roleOptions, defaultMemberProfile)
+      : null
 
-    if (session?.role) {
-      setSelectedRole(session.role)
+    setAuthSession(normalizedSession)
+
+    if (normalizedSession?.role) {
+      setSelectedRole(normalizedSession.role)
     }
 
-    if (session?.provider !== 'supabase') {
+    if (normalizedSession?.provider !== 'supabase') {
       const fallbackTeaching = getFallbackTeaching()
 
       setHomeContent((currentContent) => ({
@@ -248,11 +286,11 @@ function App() {
       })
     }
 
-    if (session?.provider === 'supabase' && session.memberProfile) {
-      setMemberProfile(session.memberProfile)
-      setMemberProfileForm(session.memberProfile)
+    if (normalizedSession?.provider === 'supabase' && normalizedSession.memberProfile) {
+      setMemberProfile(normalizedSession.memberProfile)
+      setMemberProfileForm(normalizedSession.memberProfile)
     }
-  }
+  }, [])
 
   function resetAuthMessages() {
     if (authError) {
@@ -268,7 +306,7 @@ function App() {
     const normalizedError = error?.toLowerCase?.() ?? ''
 
     if (isTransientSupabaseError(error)) {
-      return 'Shared requests are using local device storage until Supabase reconnects.'
+      return 'Shared request sync is temporarily reconnecting to Supabase.'
     }
 
     if (
@@ -293,7 +331,7 @@ function App() {
 
   function getJournalSyncMessage(error) {
     if (isTransientSupabaseError(error)) {
-      return 'Your journal is using local device storage until Supabase reconnects.'
+      return 'Journal sync is temporarily reconnecting to Supabase.'
     }
 
     return error
@@ -303,7 +341,7 @@ function App() {
 
   function getTeachingSyncMessage(error) {
     if (isTransientSupabaseError(error)) {
-      return 'Daily teaching is using local fallback content until Supabase reconnects.'
+      return 'Daily teaching sync is temporarily reconnecting to Supabase.'
     }
 
     return error
@@ -313,7 +351,7 @@ function App() {
 
   function getMemberDirectorySyncMessage(error) {
     if (isTransientSupabaseError(error)) {
-      return 'Registered members are temporarily unavailable until Supabase reconnects.'
+      return 'Registered members are temporarily unavailable while Supabase reconnects.'
     }
 
     return error
@@ -413,12 +451,7 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          updateFocusItemLocally(itemId, () => nextItem)
-          setFollowUpDrafts((currentDrafts) => ({
-            ...currentDrafts,
-            [itemId]: '',
-          }))
-          setRequestSyncStatus('Supabase is unreachable right now, so the follow-up message was saved only on this device.')
+          setRequestSyncStatus('Supabase is reconnecting, so the follow-up message was not saved to Supabase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -480,8 +513,7 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          updateFocusItemLocally(itemId, () => nextItem)
-          setRequestSyncStatus('Supabase is unreachable right now, so the testimony was saved only on this device.')
+          setRequestSyncStatus('Supabase is reconnecting, so the testimony was not saved to Supabase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -530,7 +562,8 @@ function App() {
 
   useEffect(() => {
     if (authSession) {
-      window.localStorage.setItem(authStorageKey, JSON.stringify(authSession))
+      const normalizedSession = normalizeStoredAuthSession(authSession, roleOptions, defaultMemberProfile)
+      window.localStorage.setItem(authStorageKey, JSON.stringify(normalizedSession))
       return
     }
 
@@ -656,7 +689,7 @@ function App() {
       isMounted = false
       unsubscribe()
     }
-  }, [])
+  }, [applyAuthSession])
 
   useEffect(() => {
     let isMounted = true
@@ -948,19 +981,23 @@ function App() {
 
   const effectiveRequestSyncStatus =
     requestSyncStatus ||
-    (sharedPrayerRequestsEnabled
-      ? 'Connecting shared requests for signed-in members...'
-      : isSupabaseConfigured
-        ? 'Supabase is configured. Sign in to sync requests across devices.'
-        : 'Requests are currently using local device storage.')
+    (!authReady && isSupabaseConfigured
+      ? 'Restoring your Supabase session...'
+      : sharedPrayerRequestsEnabled
+        ? 'Connecting shared requests for signed-in members...'
+        : isSupabaseConfigured
+          ? 'Supabase is configured. Sign in to sync requests across devices.'
+          : 'Requests are currently using local device storage.')
   const effectiveRequestSyncTone = sharedPrayerRequestsEnabled ? requestSyncTone : 'neutral'
   const effectiveJournalSyncStatus =
     journalSyncStatus ||
-    (sharedJournalEnabled
-      ? 'Connecting your journal across signed-in devices...'
-      : isSupabaseConfigured
-        ? 'Supabase is configured. Sign in to sync your journal across devices.'
-        : 'Journal entries are currently using local device storage.')
+    (!authReady && isSupabaseConfigured
+      ? 'Restoring your Supabase session...'
+      : sharedJournalEnabled
+        ? 'Connecting your journal across signed-in devices...'
+        : isSupabaseConfigured
+          ? 'Supabase is configured. Sign in to sync your journal across devices.'
+          : 'Journal entries are currently using local device storage.')
   const effectiveJournalSyncTone = sharedJournalEnabled ? journalSyncTone : 'neutral'
   const { devotion: dailyDevotion, teaching: dailyTeaching } = homeContent
 
@@ -1282,18 +1319,8 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          setFocusItems((currentItems) => [nextFocusItem, ...currentItems])
-          if (!isPastoralOnly) {
-            addPrayerRequestToLocalDeck(nextFocusItem, requesterName)
-          }
-          setRequestSyncStatus(
-            'Supabase is unreachable right now, so this prayer request was saved only on this device.',
-          )
+          setRequestSyncStatus('Supabase is reconnecting, so this prayer request was not saved to Supabase yet.')
           setRequestSyncTone('neutral')
-          setRequestText('')
-          setRequestIsAnonymous(false)
-          setRequestVisibilityScope('team')
-          requestInputRef.current?.focus()
           return
         }
 
@@ -1412,9 +1439,7 @@ function App() {
 
     if (error) {
       if (isTransientSupabaseError(error)) {
-        setMemberProfile(nextProfile)
-        setMemberProfileForm(nextProfile)
-        setMemberProfileStatus('Supabase is unreachable right now, so your profile was saved only on this device.')
+        setMemberProfileStatus('Supabase is reconnecting, so your profile was not saved to Supabase yet.')
         setAuthBusy(false)
         return
       }
@@ -1482,26 +1507,7 @@ function App() {
 
     if (error) {
       if (isTransientSupabaseError(error)) {
-        const localTeaching = {
-          ...nextTeaching,
-          isLive: false,
-          source: 'Local device fallback',
-        }
-
-        setHomeContent((currentContent) => ({
-          ...currentContent,
-          teaching: localTeaching,
-        }))
-        setTeachingForm({
-          publishDate: localTeaching.publishDate,
-          title: localTeaching.title,
-          speaker: localTeaching.speaker,
-          theme: localTeaching.theme,
-          summary: localTeaching.summary,
-          source: localTeaching.source,
-          link: localTeaching.link ?? '',
-        })
-        setTeachingStatus('Supabase is unreachable right now, so this teaching was saved only in this browser.')
+        setTeachingStatus('Supabase is reconnecting, so this teaching was not saved to Supabase yet.')
         setTeachingTone('neutral')
         setAuthBusy(false)
         return
@@ -1545,10 +1551,7 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          setFocusItems((currentItems) =>
-            currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
-          )
-          setRequestSyncStatus('Supabase is unreachable right now, so this prayer update was saved only on this device.')
+          setRequestSyncStatus('Supabase is reconnecting, so this prayer update was not saved to Supabase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -1577,9 +1580,7 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          setFocusItems((currentItems) => currentItems.filter((item) => item.id !== itemId))
-          removeLinkedDeckEntries(itemId)
-          setRequestSyncStatus('Supabase is unreachable right now, so this request was removed only on this device.')
+          setRequestSyncStatus('Supabase is reconnecting, so this request was not removed from Supabase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -1615,11 +1616,7 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          removeLinkedDeckEntries(itemId)
-          setFocusItems((currentItems) =>
-            currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
-          )
-          setRequestSyncStatus('Supabase is unreachable right now, so this answered update was saved only on this device.')
+          setRequestSyncStatus('Supabase is reconnecting, so this answered update was not saved to Supabase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -1665,10 +1662,7 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          setFocusItems((currentItems) =>
-            currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
-          )
-          setRequestSyncStatus('Supabase is unreachable right now, so this prayer was reopened only on this device.')
+          setRequestSyncStatus('Supabase is reconnecting, so this prayer was not reopened in Supabase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -1694,6 +1688,7 @@ function App() {
   }
 
   function handleAnsweredNoteChange(itemId, value) {
+    let previousItem = null
     let nextItem = null
 
     setFocusItems((currentItems) =>
@@ -1702,6 +1697,7 @@ function App() {
           return item
         }
 
+        previousItem = item
         nextItem = { ...item, answeredNote: value }
         return nextItem
       }),
@@ -1711,13 +1707,22 @@ function App() {
       return
     }
 
-    updatePrayerRequest(itemId, nextItem).then(({ error }) => {
-      if (!error) {
+    updatePrayerRequest(itemId, nextItem).then(({ item, error }) => {
+      if (!error && item) {
+        setFocusItems((currentItems) =>
+          currentItems.map((entry) => (entry.id === itemId ? item : entry)),
+        )
         return
       }
 
+      if (previousItem) {
+        setFocusItems((currentItems) =>
+          currentItems.map((entry) => (entry.id === itemId ? previousItem : entry)),
+        )
+      }
+
       if (isTransientSupabaseError(error)) {
-        setRequestSyncStatus('Supabase is unreachable right now, so the answered note was saved only on this device.')
+        setRequestSyncStatus('Supabase is reconnecting, so the answered note was not saved to Supabase yet.')
         setRequestSyncTone('neutral')
         return
       }
@@ -1757,10 +1762,7 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          setFocusItems((currentItems) =>
-            currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
-          )
-          setRequestSyncStatus('Supabase is unreachable right now, so the follow-up flag was saved only on this device.')
+          setRequestSyncStatus('Supabase is reconnecting, so the follow-up flag was not saved to Supabase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -1814,11 +1816,8 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          setJournalItems((currentEntries) => [nextEntry, ...currentEntries])
-          setJournalSyncStatus('Supabase is unreachable right now, so this journal entry was saved only on this device.')
+          setJournalSyncStatus('Supabase is reconnecting, so this journal entry was not saved to Supabase yet.')
           setJournalSyncTone('neutral')
-          setJournalForm({ title: '', detail: '' })
-          journalTitleRef.current?.focus()
           return
         }
 
@@ -1844,8 +1843,7 @@ function App() {
 
       if (error) {
         if (isTransientSupabaseError(error)) {
-          setJournalItems((currentEntries) => currentEntries.filter((entry) => entry.id !== entryId))
-          setJournalSyncStatus('Supabase is unreachable right now, so this journal removal happened only on this device.')
+          setJournalSyncStatus('Supabase is reconnecting, so this journal entry was not removed from Supabase yet.')
           setJournalSyncTone('neutral')
           return
         }
@@ -1867,12 +1865,9 @@ function App() {
 
     if (error) {
       if (isTransientSupabaseError(error)) {
-        setFocusItems((currentItems) =>
-          currentItems.map((entry) => (entry.id === itemId ? { ...entry, ...updates } : entry)),
-        )
-        setRequestSyncStatus('Supabase is unreachable right now, so this workflow change was saved only on this device.')
+        setRequestSyncStatus('Supabase is reconnecting, so this workflow change was not saved to Supabase yet.')
         setRequestSyncTone('neutral')
-        return { ...(focusItems.find((entry) => entry.id === itemId) ?? {}), ...updates }
+        return null
       }
 
       setRequestSyncStatus(`${failurePrefix}: ${error}`)
@@ -1916,11 +1911,15 @@ function App() {
 
       const nextItem = buildPrayedUpdate(selectedItem)
 
-      await updateSharedWorkflowItem(
+      const updatedItem = await updateSharedWorkflowItem(
         selectedItem.id,
         nextItem,
         'Unable to mark this request as prayed',
       )
+      if (!updatedItem) {
+        resetSwipeGesture()
+        return
+      }
       clearDeferredQueueId(selectedItem.id)
       setLastDeckAction(
         'Request marked as prayed and the requester can now see that prayer coverage happened.',
@@ -1951,7 +1950,7 @@ function App() {
         return
       }
 
-      await updateSharedWorkflowItem(
+      const updatedItem = await updateSharedWorkflowItem(
         selectedItem.id,
         {
           ...selectedItem,
@@ -1964,6 +1963,10 @@ function App() {
         },
         'Unable to send this request to pastoral review',
       )
+      if (!updatedItem) {
+        resetSwipeGesture()
+        return
+      }
       clearDeferredQueueId(selectedItem.id)
       setLastDeckAction('Request moved into pastoral review and is now limited to pastor and prayer core.')
       resetSwipeGesture()
@@ -2044,9 +2047,12 @@ function App() {
         return
       }
 
-      await updateSharedWorkflowItem(itemId, {
+      const updatedItem = await updateSharedWorkflowItem(itemId, {
         ...buildPrayedUpdate(selectedFocusItem),
       }, 'Unable to approve this prayer request')
+      if (!updatedItem) {
+        return
+      }
       clearDeferredQueueId(itemId)
       setLastDeckAction('Pastoral review approved and moved to prayed.')
       return
@@ -2074,7 +2080,7 @@ function App() {
         return
       }
 
-      await updateSharedWorkflowItem(itemId, {
+      const updatedItem = await updateSharedWorkflowItem(itemId, {
         ...selectedFocusItem,
         workflowStatus: 'queue',
         visibilityScope: 'team',
@@ -2083,6 +2089,9 @@ function App() {
         flaggedAt: null,
         prayedAt: null,
       }, 'Unable to return this request to the queue')
+      if (!updatedItem) {
+        return
+      }
       clearDeferredQueueId(itemId)
       setLastDeckAction('Pastoral review request returned to the live queue.')
       return
