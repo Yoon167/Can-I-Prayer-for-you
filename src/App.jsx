@@ -950,13 +950,17 @@ function App() {
     requestSyncStatus ||
     (sharedPrayerRequestsEnabled
       ? 'Connecting shared requests for signed-in members...'
-      : 'Requests are currently using local device storage.')
+      : isSupabaseConfigured
+        ? 'Supabase is configured. Sign in to sync requests across devices.'
+        : 'Requests are currently using local device storage.')
   const effectiveRequestSyncTone = sharedPrayerRequestsEnabled ? requestSyncTone : 'neutral'
   const effectiveJournalSyncStatus =
     journalSyncStatus ||
     (sharedJournalEnabled
       ? 'Connecting your journal across signed-in devices...'
-      : 'Journal entries are currently using local device storage.')
+      : isSupabaseConfigured
+        ? 'Supabase is configured. Sign in to sync your journal across devices.'
+        : 'Journal entries are currently using local device storage.')
   const effectiveJournalSyncTone = sharedJournalEnabled ? journalSyncTone : 'neutral'
   const { devotion: dailyDevotion, teaching: dailyTeaching } = homeContent
 
