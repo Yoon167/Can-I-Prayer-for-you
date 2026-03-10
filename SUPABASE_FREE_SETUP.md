@@ -36,6 +36,7 @@ That single script creates:
 - `daily_teachings`
 - row-level security policies
 - workflow and timestamp triggers
+- one starter daily teaching for today so the home page has live teaching content immediately
 
 ## 4. Add GitHub build secrets
 

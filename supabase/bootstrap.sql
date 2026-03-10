@@ -256,3 +256,23 @@ on public.daily_teachings
 for delete
 to authenticated
 using (public.prayer_app_is_privileged_role());
+
+insert into public.daily_teachings (
+  publish_date,
+  title,
+  speaker,
+  theme,
+  summary,
+  source,
+  link
+)
+values (
+  current_date,
+  'Faithful in the Quiet Place',
+  'Prayer App Team',
+  'Consistent prayer',
+  'Prayer grows strongest in steady, hidden faithfulness. Return to God with honesty, scripture, and trust even when the day feels ordinary.',
+  'Supabase teaching feed',
+  ''
+)
+on conflict (publish_date) do nothing;

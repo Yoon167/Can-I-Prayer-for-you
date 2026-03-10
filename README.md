@@ -26,6 +26,7 @@ The short version:
 4. Push to `main` or rerun the Pages workflow.
 
 After that, GitHub Pages will build the site with your Supabase public credentials and the app will stop using local-only demo storage.
+The bootstrap script also seeds one daily teaching entry for the current date so the synced teaching feed is not empty on first launch.
 
 ## Publish without a database
 
