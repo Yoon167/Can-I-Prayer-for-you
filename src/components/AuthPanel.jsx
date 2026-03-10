@@ -25,7 +25,7 @@ function AuthPanel({
           <p className="auth-text">
             {providerConfigured
               ? 'Create an account or sign in to join a global prayer community with your profile, requests, and journal synced across devices.'
-              : 'Supabase is not configured yet, so the app is using local demo accounts on this device while keeping the same member experience.'}
+              : 'Cloud sync is not configured yet, so the app is using local demo accounts on this device. Add the Supabase free tier later to sync profiles, requests, and journals across devices.'}
           </p>
         </div>
 

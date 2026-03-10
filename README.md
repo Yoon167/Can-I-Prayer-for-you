@@ -12,6 +12,21 @@ This project is a role-aware prayer workflow app built with React and Vite. It i
 - live daily devotion content with curated daily teaching fallback
 - Supabase-managed daily teaching feed for pastors and owners
 
+## Use Supabase free tier
+
+If you want real shared accounts and synced prayer data, use the Supabase free tier. This app already supports it.
+
+Start here: [SUPABASE_FREE_SETUP.md](SUPABASE_FREE_SETUP.md)
+
+The short version:
+
+1. Create a free Supabase project.
+2. Run [supabase/bootstrap.sql](supabase/bootstrap.sql) in Supabase SQL Editor.
+3. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as GitHub Actions secrets.
+4. Push to `main` or rerun the Pages workflow.
+
+After that, GitHub Pages will build the site with your Supabase public credentials and the app will stop using local-only demo storage.
+
 ## Publish without a database
 
 If you only have GitHub and do not want a database yet, you can still publish the app as a static website.
@@ -23,7 +38,7 @@ In that mode:
 - data does not sync across devices or between different people
 - daily devotion still attempts to load from the public feed, with built-in fallback content when needed
 
-This repo already includes [deploy-pages.yml](.github/workflows/deploy-pages.yml) so GitHub can build and publish it for you.
+This repo already includes [deploy-pages.yml](.github/workflows/deploy-pages.yml) so GitHub can build and publish it for you. If you later add Supabase Actions secrets, the same workflow will build the synced version automatically.
 
 ## Publish to GitHub Pages
 
