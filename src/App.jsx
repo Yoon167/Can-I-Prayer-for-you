@@ -290,25 +290,45 @@ function App() {
 
     let isMounted = true
 
-    restorePrayerAppSession(roleOptions).then((session) => {
+    const handleAuthRestoreFailure = () => {
       if (!isMounted) {
         return
       }
 
-      applyAuthSession(session)
-
+      applyAuthSession(null)
+      setAuthNotice(
+        'Unable to connect to Supabase right now. Check your Supabase URL, anon key, and allowed site URL, then refresh.',
+      )
       setAuthReady(true)
-    })
+    }
 
-    const unsubscribe = subscribeToPrayerAuthChanges(roleOptions, (session) => {
-      if (!isMounted) {
-        return
-      }
+    restorePrayerAppSession(roleOptions)
+      .then((session) => {
+        if (!isMounted) {
+          return
+        }
 
-      applyAuthSession(session)
+        applyAuthSession(session)
+        setAuthReady(true)
+      })
+      .catch(() => {
+        handleAuthRestoreFailure()
+      })
 
-      setAuthReady(true)
-    })
+    let unsubscribe = () => {}
+
+    try {
+      unsubscribe = subscribeToPrayerAuthChanges(roleOptions, (session) => {
+        if (!isMounted) {
+          return
+        }
+
+        applyAuthSession(session)
+        setAuthReady(true)
+      })
+    } catch {
+      handleAuthRestoreFailure()
+    }
 
     return () => {
       isMounted = false
