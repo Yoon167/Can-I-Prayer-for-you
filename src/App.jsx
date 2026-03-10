@@ -83,6 +83,7 @@ import {
 } from './utils/prayerAppUtils.js'
 
 function App() {
+  const currentBuildId = import.meta.env.VITE_APP_BUILD_ID || 'dev-local'
   const defaultMemberProfile = {
     fullName: '',
     displayName: '',
@@ -535,6 +536,74 @@ function App() {
 
     window.localStorage.removeItem(authStorageKey)
   }, [authSession])
+
+  useEffect(() => {
+    const refreshMarkerKey = 'prayer-app-refreshed-build-id'
+    let isMounted = true
+
+    async function checkForPublishedUpdate() {
+      try {
+        const versionUrl = new URL('./version.json', window.location.href)
+        versionUrl.searchParams.set('t', `${Date.now()}`)
+
+        const response = await fetch(versionUrl.toString(), {
+          cache: 'no-store',
+          headers: {
+            'cache-control': 'no-cache',
+          },
+        })
+
+        if (!response.ok || !isMounted) {
+          return
+        }
+
+        const manifest = await response.json()
+        const publishedBuildId = manifest?.buildId
+
+        if (!publishedBuildId || publishedBuildId === currentBuildId) {
+          return
+        }
+
+        if (window.sessionStorage.getItem(refreshMarkerKey) === publishedBuildId) {
+          return
+        }
+
+        window.sessionStorage.setItem(refreshMarkerKey, publishedBuildId)
+
+        const nextUrl = new URL(window.location.href)
+        nextUrl.searchParams.set('v', publishedBuildId)
+        window.location.replace(nextUrl.toString())
+      } catch {
+        // Ignore version checks when the manifest cannot be reached.
+      }
+    }
+
+    const initialCheckTimer = window.setTimeout(() => {
+      void checkForPublishedUpdate()
+    }, 3000)
+    const intervalId = window.setInterval(() => {
+      void checkForPublishedUpdate()
+    }, 60000)
+    const handleWindowFocus = () => {
+      void checkForPublishedUpdate()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void checkForPublishedUpdate()
+      }
+    }
+
+    window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      isMounted = false
+      window.clearTimeout(initialCheckTimer)
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', handleWindowFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [currentBuildId])
 
   useEffect(() => {
     if (!isSupabaseConfigured) {

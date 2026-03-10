@@ -19,6 +19,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      VITE_APP_BUILD_ID: ${{ github.sha }}
+      VITE_APP_DEPLOYED_AT: ${{ github.run_id }}-${{ github.run_attempt }}
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || '' }}
       VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || '' }}
     steps:
