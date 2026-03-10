@@ -25,7 +25,7 @@ function AuthPanel({
           <p className="auth-text">
             {providerConfigured
               ? 'Create an account or sign in to join a global prayer community with your profile, requests, and journal synced across devices.'
-              : 'Cloud sync is not configured yet, so the app is using local demo accounts on this device. Add the Supabase free tier later to sync profiles, requests, and journals across devices.'}
+              : 'Cloud sync is not configured, so this published version stores accounts, requests, and journal entries only in this browser. Add Supabase later if you want multi-device sync.'}
           </p>
         </div>
 
@@ -90,7 +90,11 @@ function AuthPanel({
                 <button type="submit" className="form-action auth-submit" disabled={authBusy}>
                   {authBusy ? 'Signing in...' : 'Sign in'}
                 </button>
-                <p className="auth-hint">Your member profile, prayer requests, and journal follow your account.</p>
+                <p className="auth-hint">
+                  {providerConfigured
+                    ? 'Your member profile, prayer requests, and journal follow your account.'
+                    : 'Your member profile, prayer requests, and journal stay on this device.'}
+                </p>
               </div>
             </div>
           </form>
