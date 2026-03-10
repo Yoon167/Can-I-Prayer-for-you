@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
-import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
+import { normalizeSupabaseSyncError, retrySupabaseOperation } from './supabaseSyncUtils.js'
 
 const journalEntriesTable = 'journal_entries'
 
@@ -29,10 +29,14 @@ export async function listJournalEntries() {
   }
 
   try {
-    const { data, error } = await supabase
-      .from(journalEntriesTable)
-      .select('id, title, detail, entry_date, created_at')
-      .order('created_at', { ascending: false })
+    const { data, error } = await retrySupabaseOperation(
+      async () =>
+        supabase
+          .from(journalEntriesTable)
+          .select('id, title, detail, entry_date, created_at')
+          .order('created_at', { ascending: false }),
+      supabase,
+    )
 
     if (error) {
       return { items: [], error: normalizeSupabaseSyncError(error, 'your journal') }
@@ -53,11 +57,15 @@ export async function createJournalEntry(entry) {
   }
 
   try {
-    const { data, error } = await supabase
-      .from(journalEntriesTable)
-      .insert(buildJournalEntryPayload(entry))
-      .select('id, title, detail, entry_date, created_at')
-      .single()
+    const { data, error } = await retrySupabaseOperation(
+      async () =>
+        supabase
+          .from(journalEntriesTable)
+          .insert(buildJournalEntryPayload(entry))
+          .select('id, title, detail, entry_date, created_at')
+          .single(),
+      supabase,
+    )
 
     if (error) {
       return { item: null, error: normalizeSupabaseSyncError(error, 'your journal') }
@@ -78,7 +86,10 @@ export async function deleteJournalEntry(entryId) {
   }
 
   try {
-    const { error } = await supabase.from(journalEntriesTable).delete().eq('id', entryId)
+    const { error } = await retrySupabaseOperation(
+      async () => supabase.from(journalEntriesTable).delete().eq('id', entryId),
+      supabase,
+    )
 
     return {
       error: error ? normalizeSupabaseSyncError(error, 'your journal') : null,

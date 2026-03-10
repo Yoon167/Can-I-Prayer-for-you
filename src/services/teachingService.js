@@ -1,6 +1,6 @@
 import { getDayIndex, teachingLibrary } from '../data/dailyContent.js'
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
-import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
+import { normalizeSupabaseSyncError, retrySupabaseOperation } from './supabaseSyncUtils.js'
 
 const dailyTeachingsTable = 'daily_teachings'
 
@@ -55,13 +55,17 @@ export async function getFeaturedTeaching(date = new Date()) {
 
   try {
     const todayKey = getTodayDateKey(date)
-    const { data, error } = await supabase
-      .from(dailyTeachingsTable)
-      .select('id, publish_date, title, speaker, theme, summary, source, link')
-      .lte('publish_date', todayKey)
-      .order('publish_date', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const { data, error } = await retrySupabaseOperation(
+      async () =>
+        supabase
+          .from(dailyTeachingsTable)
+          .select('id, publish_date, title, speaker, theme, summary, source, link')
+          .lte('publish_date', todayKey)
+          .order('publish_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      supabase,
+    )
 
     if (error) {
       return { item: getFallbackTeaching(date), error: normalizeSupabaseSyncError(error, 'daily teaching') }
@@ -83,11 +87,15 @@ export async function saveFeaturedTeaching(teaching) {
   }
 
   try {
-    const { data, error } = await supabase
-      .from(dailyTeachingsTable)
-      .upsert(buildTeachingPayload(teaching), { onConflict: 'publish_date' })
-      .select('id, publish_date, title, speaker, theme, summary, source, link')
-      .single()
+    const { data, error } = await retrySupabaseOperation(
+      async () =>
+        supabase
+          .from(dailyTeachingsTable)
+          .upsert(buildTeachingPayload(teaching), { onConflict: 'publish_date' })
+          .select('id, publish_date, title, speaker, theme, summary, source, link')
+          .single(),
+      supabase,
+    )
 
     if (error) {
       return { item: null, error: normalizeSupabaseSyncError(error, 'daily teaching') }

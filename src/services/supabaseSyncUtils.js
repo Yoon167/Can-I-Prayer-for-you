@@ -2,6 +2,7 @@ export function isTransientSupabaseError(error) {
   const message = error?.message?.toLowerCase?.() ?? error?.toLowerCase?.() ?? ''
 
   return (
+    error?.status === 0 ||
     message.includes('unable to reach supabase') ||
     message.includes('connection problem') ||
     message.includes('failed to fetch') ||
@@ -10,6 +11,48 @@ export function isTransientSupabaseError(error) {
     message.includes('load failed') ||
     message.includes('fetch failed')
   )
+}
+
+export function isSessionSupabaseError(error) {
+  const message = error?.message?.toLowerCase?.() ?? error?.toLowerCase?.() ?? ''
+
+  return (
+    message.includes('jwt') ||
+    message.includes('session') ||
+    message.includes('token') ||
+    message.includes('refresh') ||
+    message.includes('auth session missing')
+  )
+}
+
+export function shouldRetrySupabaseOperation(error) {
+  return isTransientSupabaseError(error) || isSessionSupabaseError(error)
+}
+
+export async function retrySupabaseOperation(operation, supabaseClient) {
+  let response = await operation()
+
+  if (!response?.error || !shouldRetrySupabaseOperation(response.error)) {
+    return response
+  }
+
+  if (supabaseClient) {
+    try {
+      const {
+        data: { session },
+      } = await supabaseClient.auth.getSession()
+
+      if (session) {
+        await supabaseClient.auth.refreshSession()
+      }
+    } catch {
+      // Ignore refresh failures and let the retry result surface the real error.
+    }
+  }
+
+  response = await operation()
+
+  return response
 }
 
 export function normalizeSupabaseSyncError(error, resourceLabel) {
@@ -28,11 +71,7 @@ export function normalizeSupabaseSyncError(error, resourceLabel) {
     return `Supabase denied access to ${resourceLabel}. Run the latest bootstrap SQL and sign out, then sign back in.`
   }
 
-  if (
-    normalizedMessage.includes('jwt') ||
-    normalizedMessage.includes('session') ||
-    normalizedMessage.includes('token')
-  ) {
+  if (isSessionSupabaseError(message)) {
     return `Your Supabase session for ${resourceLabel} needs to be refreshed. Sign out and sign back in.`
   }
 
