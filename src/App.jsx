@@ -305,7 +305,12 @@ function App() {
         }
 
         console.error('Unable to restore session from Supabase', error)
-        setAuthError('Unable to restore session. Please sign in.')
+        const errorDetail = typeof error === 'string' ? error : error?.message
+        setAuthError(
+          errorDetail
+            ? `Unable to restore session: ${errorDetail}. Please sign in.`
+            : 'Unable to restore session. Please sign in.',
+        )
       } finally {
         if (isMounted) {
           setAuthReady(true)
