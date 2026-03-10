@@ -111,6 +111,7 @@ drop policy if exists "Authenticated users can read prayer requests" on public.p
 drop policy if exists "Authenticated users can insert prayer requests" on public.prayer_requests;
 drop policy if exists "Authenticated users can update prayer requests" on public.prayer_requests;
 drop policy if exists "Authenticated users can delete prayer requests" on public.prayer_requests;
+drop policy if exists "Privileged users can delete prayer requests" on public.prayer_requests;
 
 create policy "Authenticated users can read prayer requests"
 on public.prayer_requests
