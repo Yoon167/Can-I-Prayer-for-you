@@ -260,6 +260,10 @@ function App() {
   function getPrayerRequestSyncMessage(error) {
     const normalizedError = error?.toLowerCase?.() ?? ''
 
+    if (isTransientSupabaseError(error)) {
+      return 'Shared requests are using local device storage until Supabase reconnects.'
+    }
+
     if (
       normalizedError.includes('prayer_requests') &&
       (normalizedError.includes('does not exist') || normalizedError.includes('schema cache'))
@@ -282,7 +286,7 @@ function App() {
 
   function getJournalSyncMessage(error) {
     if (isTransientSupabaseError(error)) {
-      return 'Supabase is unreachable right now, so your journal is using local device storage until the connection returns.'
+      return 'Your journal is using local device storage until Supabase reconnects.'
     }
 
     return error
@@ -292,7 +296,7 @@ function App() {
 
   function getTeachingSyncMessage(error) {
     if (isTransientSupabaseError(error)) {
-      return 'Supabase is unreachable right now, so the app is using the local daily teaching fallback.'
+      return 'Daily teaching is using local fallback content until Supabase reconnects.'
     }
 
     return error
@@ -535,7 +539,7 @@ function App() {
 
       if (error) {
         setRequestSyncStatus(getPrayerRequestSyncMessage(error))
-        setRequestSyncTone('error')
+        setRequestSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
         return
       }
 
@@ -560,7 +564,7 @@ function App() {
         }
 
         setRequestSyncStatus(getPrayerRequestSyncMessage(error))
-        setRequestSyncTone('error')
+        setRequestSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
       },
     )
 

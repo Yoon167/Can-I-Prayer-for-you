@@ -2,6 +2,8 @@ export function isTransientSupabaseError(error) {
   const message = error?.message?.toLowerCase?.() ?? error?.toLowerCase?.() ?? ''
 
   return (
+    message.includes('unable to reach supabase') ||
+    message.includes('connection problem') ||
     message.includes('failed to fetch') ||
     message.includes('networkerror') ||
     message.includes('network request failed') ||
