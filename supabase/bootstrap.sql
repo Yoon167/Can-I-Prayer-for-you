@@ -17,7 +17,7 @@ returns boolean
 language sql
 stable
 as $$
-  select public.prayer_app_current_role() in ('intercessor', 'pastor', 'prayer-core')
+  select public.prayer_app_current_role() in ('member', 'intercessor', 'pastor', 'prayer-core')
 $$;
 
 create or replace function public.prayer_app_is_privileged_role()

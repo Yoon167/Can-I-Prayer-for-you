@@ -90,7 +90,19 @@ function mapAccountTypeToRole(accountType) {
     return 'prayer-core'
   }
 
-  return 'intercessor'
+  return 'member'
+}
+
+function mapRoleToAccountType(role) {
+  if (role === 'pastor') {
+    return 'pastor'
+  }
+
+  if (role === 'prayer-core') {
+    return 'owner'
+  }
+
+  return 'member'
 }
 
 function normalizeMemberProfile(profile) {
@@ -123,7 +135,13 @@ function normalizeMemberProfile(profile) {
 }
 
 function getMemberProfile(user) {
-  return normalizeMemberProfile(user?.user_metadata?.memberProfile)
+  const normalizedProfile = normalizeMemberProfile(user?.user_metadata?.memberProfile)
+  const resolvedRole = user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(normalizedProfile.accountType)
+
+  return {
+    ...normalizedProfile,
+    accountType: mapRoleToAccountType(resolvedRole),
+  }
 }
 
 function buildSession(role, email, provider, memberProfile = normalizeMemberProfile(), userId = '') {
@@ -204,8 +222,11 @@ export async function signInToPrayerApp({ email, password }) {
 }
 
 export async function signUpToPrayerApp({ email, password, memberProfile }) {
-  const normalizedProfile = normalizeMemberProfile(memberProfile)
-  const role = mapAccountTypeToRole(normalizedProfile.accountType)
+  const normalizedProfile = {
+    ...normalizeMemberProfile(memberProfile),
+    accountType: 'member',
+  }
+  const role = 'member'
 
   if (!email.trim() || !password) {
     return { error: 'Enter your email and password to create an account.' }
@@ -307,8 +328,12 @@ export async function restorePrayerAppSession(roleOptions) {
 }
 
 export async function savePrayerAppMemberProfile(profile, currentSession) {
-  const normalizedProfile = normalizeMemberProfile(profile)
-  const role = mapAccountTypeToRole(normalizedProfile.accountType)
+  const preservedRole = currentSession?.role ?? 'member'
+  const normalizedProfile = {
+    ...normalizeMemberProfile(profile),
+    accountType: mapRoleToAccountType(preservedRole),
+  }
+  const role = preservedRole
 
   if (!isSupabaseConfigured || !supabase) {
     if (currentSession?.provider === 'local' && currentSession.email) {

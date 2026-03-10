@@ -1022,6 +1022,10 @@
   border: none;
 }
 
+.focus-toggle-static {
+  cursor: default;
+}
+
 .focus-item-complete .focus-toggle span:last-child {
   text-decoration: line-through;
   color: #68825a;

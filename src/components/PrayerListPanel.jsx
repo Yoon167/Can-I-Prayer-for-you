@@ -17,6 +17,7 @@ function PrayerListPanel({
   requestSyncStatus,
   requestSyncTone,
   canRemoveRequests,
+  canManagePrayerWorkflow,
 }) {
   return (
     <article className="panel">
@@ -63,8 +64,7 @@ function PrayerListPanel({
       </div>
 
       <p className="form-helper">
-        New requests added here also enter the live swipe queue for intercessors and pastoral
-        review.
+        New requests added here can be covered in prayer by the team. Intercessor and pastoral workflow actions are reserved for assigned prayer leaders.
       </p>
 
       {requestSyncStatus ? (
@@ -93,30 +93,41 @@ function PrayerListPanel({
         {filteredFocusItems.map((item) => (
           <li key={item.id} className={item.completed ? 'focus-item focus-item-complete' : 'focus-item'}>
             <div className="focus-item-main">
-              <button
-                type="button"
-                className="focus-toggle"
-                onClick={() => handleToggleFocusItem(item.id)}
-                aria-pressed={item.completed}
-              >
-                <span className="focus-check" aria-hidden="true">
-                  {item.completed ? '✓' : ''}
-                </span>
-                <span>{item.label}</span>
-              </button>
+              {canManagePrayerWorkflow ? (
+                <button
+                  type="button"
+                  className="focus-toggle"
+                  onClick={() => handleToggleFocusItem(item.id)}
+                  aria-pressed={item.completed}
+                >
+                  <span className="focus-check" aria-hidden="true">
+                    {item.completed ? '✓' : ''}
+                  </span>
+                  <span>{item.label}</span>
+                </button>
+              ) : (
+                <div className="focus-toggle focus-toggle-static" aria-label={item.label}>
+                  <span className="focus-check" aria-hidden="true">
+                    {item.completed ? '✓' : ''}
+                  </span>
+                  <span>{item.label}</span>
+                </div>
+              )}
               <p className="focus-requester">
                 Requested by <strong>{item.isAnonymous ? 'Anonymous member' : item.requestedBy}</strong>
               </p>
             </div>
             <div className="focus-actions">
-              <button
-                type="button"
-                className="ghost-action answer-action"
-                onClick={() => handleMarkAnswered(item.id)}
-                aria-label={`Mark ${item.label} as answered`}
-              >
-                Answered
-              </button>
+              {canManagePrayerWorkflow ? (
+                <button
+                  type="button"
+                  className="ghost-action answer-action"
+                  onClick={() => handleMarkAnswered(item.id)}
+                  aria-label={`Mark ${item.label} as answered`}
+                >
+                  Answered
+                </button>
+              ) : null}
               {canRemoveRequests ? (
                 <button
                   type="button"

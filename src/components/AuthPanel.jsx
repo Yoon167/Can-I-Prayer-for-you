@@ -212,7 +212,7 @@ function AuthPanel({
                 </div>
               </div>
 
-              <p className="auth-hint">Every new account starts as a member automatically and can personalize the profile later.</p>
+              <p className="auth-hint">Every new account starts as a member automatically. Pastors or prayer core can assign elevated prayer-team access later.</p>
 
               {authError ? <p className="auth-error">{authError}</p> : null}
               {authNotice ? <p className="request-sync-status">{authNotice}</p> : null}

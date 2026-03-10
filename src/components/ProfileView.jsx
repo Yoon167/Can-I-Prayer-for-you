@@ -19,12 +19,7 @@ function ProfileView({
   handleSaveTeaching,
 }) {
   const memberIdentity = memberProfile.displayName || memberProfile.fullName || 'Not saved yet'
-  const accountTypeLabel =
-    memberProfile.accountType === 'owner'
-      ? 'Owner'
-      : memberProfile.accountType === 'pastor'
-        ? 'Pastor'
-        : 'Member'
+  const accessLevelLabel = activeRoleConfig.label
 
   return (
     <section className="content-grid profile-grid">
@@ -44,9 +39,9 @@ function ProfileView({
             <p>{authSession.provider ? `Provider: ${authSession.provider}` : 'Provider not available'}</p>
           </section>
           <section className="profile-card">
-            <p className="moment-time">Account type</p>
-            <h3>{accountTypeLabel}</h3>
-            <p>{`Operational workflow: ${activeRoleConfig.label}. ${activeRoleConfig.summary}`}</p>
+            <p className="moment-time">Access level</p>
+            <h3>{accessLevelLabel}</h3>
+            <p>{activeRoleConfig.summary}</p>
           </section>
           <section className="profile-card">
             <p className="moment-time">Member identity</p>
@@ -169,24 +164,14 @@ function ProfileView({
               placeholder="Pastor or spiritual leader"
             />
           </label>
-
-          <label>
-            <span className="auth-label">Profile type</span>
-            <select
-              className="auth-input"
-              name="accountType"
-              value={memberProfileForm.accountType}
-              onChange={handleMemberProfileChange}
-            >
-              <option value="member">Member</option>
-              <option value="pastor">Pastor</option>
-              <option value="owner">Owner</option>
-            </select>
-          </label>
           </div>
 
           <p className="form-helper profile-form-helper">
             Members can pray globally, share requests, and keep a personal profile. Leave a request anonymous whenever needed. If you do not, the display name is used first, then your full name.
+          </p>
+
+          <p className="form-helper profile-form-helper">
+            Access changes are assigned by pastors or prayer core. Member profiles cannot promote themselves to intercessor, pastor, or prayer core from this screen.
           </p>
 
           {memberProfileStatus ? (

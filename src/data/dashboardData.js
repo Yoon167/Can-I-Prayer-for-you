@@ -182,6 +182,12 @@ export const filterOptions = ['all', 'active', 'completed']
 
 export const roleOptions = [
   {
+    id: 'member',
+    label: 'Member',
+    summary: 'Share prayer requests, keep your journal, and follow the daily prayer rhythm.',
+    accessCodeHint: 'Assigned by default',
+  },
+  {
     id: 'intercessor',
     label: 'Intercessor',
     summary: 'Work through the live prayer queue and cover current requests in real time.',
@@ -202,6 +208,7 @@ export const roleOptions = [
 ]
 
 export const demoAccessCodes = {
+  member: 'MEMBER',
   intercessor: 'COVER',
   pastor: 'SHEPHERD',
   'prayer-core': 'WATCH',

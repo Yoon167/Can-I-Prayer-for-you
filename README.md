@@ -92,6 +92,7 @@ To manage daily teaching from the app, run [supabase/daily_teachings.sql](supaba
 6. Use one of these role values:
 
 ```text
+member
 intercessor
 pastor
 prayer-core

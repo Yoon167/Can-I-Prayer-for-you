@@ -62,9 +62,12 @@ At that point the app will switch from local-only demo mode to Supabase-backed a
 This app expects one of these role values in `app_metadata.role` or `user_metadata.role`:
 
 ```text
+member
 intercessor
 pastor
 prayer-core
 ```
+
+New signups should stay `member` by default. Only pastors or prayer-core should assign elevated roles.
 
 If you want to create or update users from the repo later, you can still use the provisioning script with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` locally.

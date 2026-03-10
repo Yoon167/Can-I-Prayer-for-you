@@ -631,15 +631,18 @@ function App() {
     'Community member'
   const memberNameForGreeting = memberProfile.displayName || memberProfile.fullName || memberDisplayName
   const accountTypeLabel =
-    memberProfile.accountType === 'owner'
-      ? 'Owner'
-      : memberProfile.accountType === 'pastor'
+    activeRole === 'prayer-core'
+      ? 'Prayer Core'
+      : activeRole === 'pastor'
         ? 'Pastor'
-        : 'Member'
+        : activeRole === 'intercessor'
+          ? 'Intercessor'
+          : 'Member'
   const canManageTeaching =
-    memberProfile.accountType === 'owner' || memberProfile.accountType === 'pastor'
+    activeRole === 'prayer-core' || activeRole === 'pastor'
   const canRemoveRequests =
     !sharedPrayerRequestsEnabled || activeRole === 'pastor' || activeRole === 'prayer-core'
+  const canManagePrayerWorkflow = activeRole === 'intercessor' || activeRole === 'pastor' || activeRole === 'prayer-core'
   const showSwipeQueue = activeRole === 'intercessor' || activeRole === 'prayer-core'
   const showPastoralReview = activeRole === 'pastor' || activeRole === 'prayer-core'
   const showTeamSpaces = activeRole === 'intercessor' || activeRole === 'prayer-core'
@@ -1545,6 +1548,7 @@ function App() {
               requestSyncStatus={effectiveRequestSyncStatus}
               requestSyncTone={effectiveRequestSyncTone}
               canRemoveRequests={canRemoveRequests}
+              canManagePrayerWorkflow={canManagePrayerWorkflow}
             />
             <AnsweredPrayersPanel
               answeredFocusItems={answeredFocusItems}
