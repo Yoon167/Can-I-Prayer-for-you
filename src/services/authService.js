@@ -317,7 +317,7 @@ export async function restorePrayerAppSession(roleOptions) {
   const { data, error } = await supabase.auth.getSession()
 
   if (error) {
-    throw new Error(normalizeSupabaseAuthError(error))
+    throw normalizeSupabaseAuthError(error)
   }
 
   if (!data.session) {
