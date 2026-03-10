@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import './App.css'
 import AnsweredPrayersPanel from './components/AnsweredPrayersPanel.jsx'
 import AnalyticsDashboard from './components/AnalyticsDashboard.jsx'
@@ -630,6 +630,28 @@ function App() {
   const sharedJournalEnabled = isJournalSyncConfigured && authSession?.provider === 'supabase'
   const sharedTeachingEnabled = isTeachingSyncConfigured && authSession?.provider === 'supabase'
 
+  const refreshSharedPrayerRequests = useEffectEvent(async ({ preserveStatus = false } = {}) => {
+    const { items, error } = await listPrayerRequests()
+
+    if (error) {
+      if (!preserveStatus) {
+        setRequestSyncStatus(getPrayerRequestSyncMessage(error))
+        setRequestSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+      }
+
+      return false
+    }
+
+    setFocusItems(normalizeFocusItems(items))
+
+    if (!preserveStatus) {
+      setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
+      setRequestSyncTone('neutral')
+    }
+
+    return true
+  })
+
   useEffect(() => {
     if (!sharedTeachingEnabled) {
       return undefined
@@ -706,22 +728,24 @@ function App() {
     }
 
     let isMounted = true
+    let refreshTimer = null
+    let initialRefreshTimer = null
 
-    listPrayerRequests().then(({ items, error }) => {
+    initialRefreshTimer = window.setTimeout(() => {
       if (!isMounted) {
         return
       }
 
-      if (error) {
-        setRequestSyncStatus(getPrayerRequestSyncMessage(error))
-        setRequestSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+      refreshSharedPrayerRequests()
+    }, 0)
+
+    const handleWindowFocus = () => {
+      if (!isMounted) {
         return
       }
 
-      setFocusItems(normalizeFocusItems(items))
-      setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
-      setRequestSyncTone('neutral')
-    })
+      refreshSharedPrayerRequests({ preserveStatus: true })
+    }
 
     const unsubscribe = subscribeToPrayerRequests(
       (items) => {
@@ -743,8 +767,25 @@ function App() {
       },
     )
 
+    refreshTimer = window.setInterval(() => {
+      if (!isMounted) {
+        return
+      }
+
+      refreshSharedPrayerRequests({ preserveStatus: true })
+    }, 15000)
+
+    window.addEventListener('focus', handleWindowFocus)
+
     return () => {
       isMounted = false
+      if (initialRefreshTimer) {
+        window.clearTimeout(initialRefreshTimer)
+      }
+      if (refreshTimer) {
+        window.clearInterval(refreshTimer)
+      }
+      window.removeEventListener('focus', handleWindowFocus)
       unsubscribe()
     }
   }, [sharedPrayerRequestsEnabled, authUserId])
