@@ -334,7 +334,8 @@ export async function restorePrayerAppSession(roleOptions) {
       getMemberProfile(data.session.user),
       data.session.user?.id ?? '',
     )
-  } catch {
+  } catch (error) {
+    console.error('Unable to restore session from Supabase', error)
     return null
   }
 }
