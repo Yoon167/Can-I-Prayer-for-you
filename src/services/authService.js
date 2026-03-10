@@ -314,30 +314,29 @@ export async function restorePrayerAppSession(roleOptions) {
     return null
   }
 
-  try {
-    const { data, error } = await supabase.auth.getSession()
+  const { data, error } = await supabase.auth.getSession()
 
-    if (error || !data.session) {
-      return null
-    }
+  if (error) {
+    throw error
+  }
 
-    const sessionRole = getSessionRole(data.session)
-
-    if (!roleOptions.some((role) => role.id === sessionRole)) {
-      return null
-    }
-
-    return buildSession(
-      sessionRole,
-      data.session.user?.email ?? '',
-      'supabase',
-      getMemberProfile(data.session.user),
-      data.session.user?.id ?? '',
-    )
-  } catch (error) {
-    console.error('Unable to restore session from Supabase', error)
+  if (!data.session) {
     return null
   }
+
+  const sessionRole = getSessionRole(data.session)
+
+  if (!roleOptions.some((role) => role.id === sessionRole)) {
+    return null
+  }
+
+  return buildSession(
+    sessionRole,
+    data.session.user?.email ?? '',
+    'supabase',
+    getMemberProfile(data.session.user),
+    data.session.user?.id ?? '',
+  )
 }
 
 export async function savePrayerAppMemberProfile(profile, currentSession) {
