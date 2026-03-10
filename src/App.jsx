@@ -441,7 +441,7 @@ function App() {
 
       if (error) {
         setRequestSyncStatus(
-          'Shared request sync is unavailable. Create the Supabase prayer_requests table to enable multi-device requests.',
+          'Shared request sync is unavailable. Run supabase/prayer_requests.sql in Supabase SQL Editor to create the prayer_requests table and enable multi-device requests.',
         )
         setRequestSyncTone('error')
         return

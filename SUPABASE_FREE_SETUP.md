@@ -35,8 +35,11 @@ That single script creates:
 - `journal_entries`
 - `daily_teachings`
 - row-level security policies
+- Supabase Realtime wiring for shared prayer request updates
 - workflow and timestamp triggers
 - one starter daily teaching for today so the home page has live teaching content immediately
+
+If shared requests are the only thing you need to repair, you can run [supabase/prayer_requests.sql](supabase/prayer_requests.sql) by itself. That script creates the `prayer_requests` table, updates older schemas, and adds the table to `supabase_realtime` for live multi-device updates.
 
 ## 4. Add GitHub build secrets
 

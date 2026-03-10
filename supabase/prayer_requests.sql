@@ -35,6 +35,24 @@ alter table public.prayer_requests
 
 alter table public.prayer_requests enable row level security;
 
+do $$
+begin
+  if exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) and not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'prayer_requests'
+  ) then
+    execute 'alter publication supabase_realtime add table public.prayer_requests';
+  end if;
+end;
+$$;
+
 create or replace function public.prayer_app_current_role()
 returns text
 language sql
@@ -111,6 +129,7 @@ drop policy if exists "Authenticated users can read prayer requests" on public.p
 drop policy if exists "Authenticated users can insert prayer requests" on public.prayer_requests;
 drop policy if exists "Authenticated users can update prayer requests" on public.prayer_requests;
 drop policy if exists "Authenticated users can delete prayer requests" on public.prayer_requests;
+drop policy if exists "Privileged users can delete prayer requests" on public.prayer_requests;
 
 create policy "Authenticated users can read prayer requests"
 on public.prayer_requests

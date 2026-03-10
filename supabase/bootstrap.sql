@@ -63,6 +63,24 @@ alter table public.prayer_requests
 
 alter table public.prayer_requests enable row level security;
 
+do $$
+begin
+  if exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) and not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'prayer_requests'
+  ) then
+    execute 'alter publication supabase_realtime add table public.prayer_requests';
+  end if;
+end;
+$$;
+
 create or replace function public.enforce_prayer_request_workflow()
 returns trigger
 language plpgsql

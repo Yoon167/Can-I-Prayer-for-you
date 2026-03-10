@@ -129,6 +129,7 @@ That script does three things:
 - creates the `prayer_requests` table if it does not exist
 - adds any missing workflow columns if you started from an older version
 - installs role-aware RLS policies and a trigger that enforces workflow transitions
+- adds `public.prayer_requests` to `supabase_realtime` so request changes appear on other signed-in devices
 
 The policy model is:
 
