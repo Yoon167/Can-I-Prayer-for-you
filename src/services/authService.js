@@ -173,28 +173,32 @@ export async function signInToPrayerApp({ email, password }) {
       return { error: getAuthRateLimitMessage() }
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    })
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      })
 
-    if (error) {
+      if (error) {
+        return { error: normalizeSupabaseAuthError(error) }
+      }
+
+      clearAuthRateLimitCooldown()
+
+      const sessionRole = getSessionRole(data.session)
+      const memberProfile = getMemberProfile(data.user)
+
+      return {
+        session: buildSession(
+          sessionRole,
+          data.user?.email ?? '',
+          'supabase',
+          memberProfile,
+          data.user?.id ?? '',
+        ),
+      }
+    } catch (error) {
       return { error: normalizeSupabaseAuthError(error) }
-    }
-
-    clearAuthRateLimitCooldown()
-
-    const sessionRole = getSessionRole(data.session)
-    const memberProfile = getMemberProfile(data.user)
-
-    return {
-      session: buildSession(
-        sessionRole,
-        data.user?.email ?? '',
-        'supabase',
-        memberProfile,
-        data.user?.id ?? '',
-      ),
     }
   }
 
@@ -237,33 +241,37 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
       return { error: getAuthRateLimitMessage() }
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: {
-          role,
-          memberProfile: normalizedProfile,
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            role,
+            memberProfile: normalizedProfile,
+          },
         },
-      },
-    })
+      })
 
-    if (error) {
-      return { error: normalizeSupabaseAuthError(error) }
-    }
-
-    clearAuthRateLimitCooldown()
-
-    if (!data.session) {
-      return {
-        session: null,
-        message: 'Account created. Sign in with your email and password to continue.',
+      if (error) {
+        return { error: normalizeSupabaseAuthError(error) }
       }
-    }
 
-    return {
-      session: buildSession(role, data.user?.email ?? '', 'supabase', normalizedProfile, data.user?.id ?? ''),
-      message: 'Account created successfully.',
+      clearAuthRateLimitCooldown()
+
+      if (!data.session) {
+        return {
+          session: null,
+          message: 'Account created. Sign in with your email and password to continue.',
+        }
+      }
+
+      return {
+        session: buildSession(role, data.user?.email ?? '', 'supabase', normalizedProfile, data.user?.id ?? ''),
+        message: 'Account created successfully.',
+      }
+    } catch (error) {
+      return { error: normalizeSupabaseAuthError(error) }
     }
   }
 
@@ -306,25 +314,29 @@ export async function restorePrayerAppSession(roleOptions) {
     return null
   }
 
-  const { data, error } = await supabase.auth.getSession()
+  try {
+    const { data, error } = await supabase.auth.getSession()
 
-  if (error || !data.session) {
+    if (error || !data.session) {
+      return null
+    }
+
+    const sessionRole = getSessionRole(data.session)
+
+    if (!roleOptions.some((role) => role.id === sessionRole)) {
+      return null
+    }
+
+    return buildSession(
+      sessionRole,
+      data.session.user?.email ?? '',
+      'supabase',
+      getMemberProfile(data.session.user),
+      data.session.user?.id ?? '',
+    )
+  } catch {
     return null
   }
-
-  const sessionRole = getSessionRole(data.session)
-
-  if (!roleOptions.some((role) => role.id === sessionRole)) {
-    return null
-  }
-
-  return buildSession(
-    sessionRole,
-    data.session.user?.email ?? '',
-    'supabase',
-    getMemberProfile(data.session.user),
-    data.session.user?.id ?? '',
-  )
 }
 
 export async function savePrayerAppMemberProfile(profile, currentSession) {

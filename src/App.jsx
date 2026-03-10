@@ -290,15 +290,30 @@ function App() {
 
     let isMounted = true
 
-    restorePrayerAppSession(roleOptions).then((session) => {
-      if (!isMounted) {
-        return
+    const initializeAuth = async () => {
+      try {
+        const session = await restorePrayerAppSession(roleOptions)
+
+        if (!isMounted) {
+          return
+        }
+
+        applyAuthSession(session)
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        console.error('Unable to restore Supabase session', error)
+        setAuthError('Supabase sign-in is unavailable right now. Please sign in again.')
+      } finally {
+        if (isMounted) {
+          setAuthReady(true)
+        }
       }
+    }
 
-      applyAuthSession(session)
-
-      setAuthReady(true)
-    })
+    initializeAuth()
 
     const unsubscribe = subscribeToPrayerAuthChanges(roleOptions, (session) => {
       if (!isMounted) {
