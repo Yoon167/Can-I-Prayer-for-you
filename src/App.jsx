@@ -71,6 +71,7 @@ import {
   listJournalEntries,
   subscribeToJournalEntries,
 } from './services/journalService.js'
+import { isTransientSupabaseError } from './services/supabaseSyncUtils.js'
 import {
   createId,
   formatAnsweredDate,
@@ -279,6 +280,46 @@ function App() {
       : 'Shared request sync ran into a connection problem. The current screen will keep working locally.'
   }
 
+  function getJournalSyncMessage(error) {
+    if (isTransientSupabaseError(error)) {
+      return 'Supabase is unreachable right now, so your journal is using local device storage until the connection returns.'
+    }
+
+    return error
+      ? `Personal journal sync is unavailable: ${error}`
+      : 'Personal journal sync ran into a connection problem. The current screen will keep working locally.'
+  }
+
+  function getTeachingSyncMessage(error) {
+    if (isTransientSupabaseError(error)) {
+      return 'Supabase is unreachable right now, so the app is using the local daily teaching fallback.'
+    }
+
+    return error
+      ? `Daily teaching sync is unavailable: ${error}`
+      : 'Daily teaching sync is unavailable right now, so the app is using the local teaching fallback.'
+  }
+
+  function addPrayerRequestToLocalDeck(focusItem, requesterName) {
+    setPrayerQueue((currentItems) => [
+      {
+        id: createId('deck'),
+        focusItemId: focusItem.id,
+        name: requesterName,
+        requestedBy: requesterName,
+        isAnonymous: focusItem.isAnonymous,
+        request: focusItem.label,
+        category: focusItem.category,
+        confidentiality: focusItem.confidentiality,
+        submittedBy: focusItem.submittedBy,
+        assignedTo: focusItem.assignedTo,
+        flaggedAt: focusItem.flaggedAt,
+        prayedAt: focusItem.prayedAt,
+      },
+      ...currentItems,
+    ])
+  }
+
   useEffect(() => {
     window.localStorage.setItem(focusStorageKey, JSON.stringify(focusItems))
   }, [focusItems])
@@ -437,8 +478,8 @@ function App() {
       })
 
       if (error) {
-        setTeachingStatus(`Teaching feed fallback is active: ${error}`)
-        setTeachingTone('error')
+        setTeachingStatus(getTeachingSyncMessage(error))
+        setTeachingTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
       }
     })
 
@@ -469,8 +510,8 @@ function App() {
           return
         }
 
-        setTeachingStatus(`Unable to sync the teaching feed: ${error}`)
-        setTeachingTone('error')
+        setTeachingStatus(getTeachingSyncMessage(error))
+        setTeachingTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
       },
     )
 
@@ -542,10 +583,8 @@ function App() {
       }
 
       if (error) {
-        setJournalSyncStatus(
-          'Personal journal sync is unavailable. Create the Supabase journal_entries table to enable multi-device journals.',
-        )
-        setJournalSyncTone('error')
+        setJournalSyncStatus(getJournalSyncMessage(error))
+        setJournalSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
         return
       }
 
@@ -564,15 +603,13 @@ function App() {
         setJournalSyncStatus('Your journal is syncing across signed-in devices.')
         setJournalSyncTone('neutral')
       },
-      () => {
+      (error) => {
         if (!isMounted) {
           return
         }
 
-        setJournalSyncStatus(
-          'Journal sync ran into a connection problem. The current screen will keep working locally.',
-        )
-        setJournalSyncTone('error')
+        setJournalSyncStatus(getJournalSyncMessage(error))
+        setJournalSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
       },
     )
 
@@ -871,6 +908,19 @@ function App() {
       const { item, error } = await createPrayerRequest(nextFocusItem)
 
       if (error) {
+        if (isTransientSupabaseError(error)) {
+          setFocusItems((currentItems) => [nextFocusItem, ...currentItems])
+          addPrayerRequestToLocalDeck(nextFocusItem, requesterName)
+          setRequestSyncStatus(
+            'Supabase is unreachable right now, so this prayer request was saved only on this device.',
+          )
+          setRequestSyncTone('neutral')
+          setRequestText('')
+          setRequestIsAnonymous(false)
+          requestInputRef.current?.focus()
+          return
+        }
+
         setRequestSyncStatus(`Unable to save this request to Supabase: ${error}`)
         setRequestSyncTone('error')
         return
@@ -884,23 +934,7 @@ function App() {
     }
 
     if (!sharedPrayerRequestsEnabled) {
-      setPrayerQueue((currentItems) => [
-        {
-          id: createId('deck'),
-          focusItemId: focusId,
-          name: requesterName,
-          requestedBy: requesterName,
-          isAnonymous: requestIsAnonymous,
-          request: trimmedRequest,
-          category: 'Community care',
-          confidentiality: 'Intercessor safe',
-          submittedBy: requestIsAnonymous ? 'Anonymous prayer request' : 'Member prayer request',
-          assignedTo: 'Open team',
-          flaggedAt: null,
-          prayedAt: null,
-        },
-        ...currentItems,
-      ])
+      addPrayerRequestToLocalDeck(nextFocusItem, requesterName)
     }
     setRequestText('')
     setRequestIsAnonymous(false)
@@ -998,6 +1032,14 @@ function App() {
     const { session, error } = await savePrayerAppMemberProfile(nextProfile, authSession)
 
     if (error) {
+      if (isTransientSupabaseError(error)) {
+        setMemberProfile(nextProfile)
+        setMemberProfileForm(nextProfile)
+        setMemberProfileStatus('Supabase is unreachable right now, so your profile was saved only on this device.')
+        setAuthBusy(false)
+        return
+      }
+
       setMemberProfileStatus(error)
       setAuthBusy(false)
       return
@@ -1060,6 +1102,32 @@ function App() {
     const { item, error } = await saveFeaturedTeaching(nextTeaching)
 
     if (error) {
+      if (isTransientSupabaseError(error)) {
+        const localTeaching = {
+          ...nextTeaching,
+          isLive: false,
+          source: 'Local device fallback',
+        }
+
+        setHomeContent((currentContent) => ({
+          ...currentContent,
+          teaching: localTeaching,
+        }))
+        setTeachingForm({
+          publishDate: localTeaching.publishDate,
+          title: localTeaching.title,
+          speaker: localTeaching.speaker,
+          theme: localTeaching.theme,
+          summary: localTeaching.summary,
+          source: localTeaching.source,
+          link: localTeaching.link ?? '',
+        })
+        setTeachingStatus('Supabase is unreachable right now, so this teaching was saved only in this browser.')
+        setTeachingTone('neutral')
+        setAuthBusy(false)
+        return
+      }
+
       setTeachingStatus(error)
       setTeachingTone('error')
       setAuthBusy(false)
@@ -1097,6 +1165,15 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
+        if (isTransientSupabaseError(error)) {
+          setFocusItems((currentItems) =>
+            currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
+          )
+          setRequestSyncStatus('Supabase is unreachable right now, so this prayer update was saved only on this device.')
+          setRequestSyncTone('neutral')
+          return
+        }
+
         setRequestSyncStatus(`Unable to update this request in Supabase: ${error}`)
         setRequestSyncTone('error')
         return
@@ -1120,6 +1197,14 @@ function App() {
       const { error } = await deletePrayerRequest(itemId)
 
       if (error) {
+        if (isTransientSupabaseError(error)) {
+          setFocusItems((currentItems) => currentItems.filter((item) => item.id !== itemId))
+          removeLinkedDeckEntries(itemId)
+          setRequestSyncStatus('Supabase is unreachable right now, so this request was removed only on this device.')
+          setRequestSyncTone('neutral')
+          return
+        }
+
         setRequestSyncStatus(`Unable to remove this request from Supabase: ${error}`)
         setRequestSyncTone('error')
         return
@@ -1150,6 +1235,16 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
+        if (isTransientSupabaseError(error)) {
+          removeLinkedDeckEntries(itemId)
+          setFocusItems((currentItems) =>
+            currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
+          )
+          setRequestSyncStatus('Supabase is unreachable right now, so this answered update was saved only on this device.')
+          setRequestSyncTone('neutral')
+          return
+        }
+
         setRequestSyncStatus(`Unable to mark this request answered in Supabase: ${error}`)
         setRequestSyncTone('error')
         return
@@ -1190,6 +1285,15 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
+        if (isTransientSupabaseError(error)) {
+          setFocusItems((currentItems) =>
+            currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
+          )
+          setRequestSyncStatus('Supabase is unreachable right now, so this prayer was reopened only on this device.')
+          setRequestSyncTone('neutral')
+          return
+        }
+
         setRequestSyncStatus(`Unable to reopen this request in Supabase: ${error}`)
         setRequestSyncTone('error')
         return
@@ -1233,6 +1337,12 @@ function App() {
         return
       }
 
+      if (isTransientSupabaseError(error)) {
+        setRequestSyncStatus('Supabase is unreachable right now, so the answered note was saved only on this device.')
+        setRequestSyncTone('neutral')
+        return
+      }
+
       setRequestSyncStatus(`Unable to sync the answered note to Supabase: ${error}`)
       setRequestSyncTone('error')
     })
@@ -1268,6 +1378,15 @@ function App() {
       const { item, error } = await createJournalEntry(nextEntry)
 
       if (error) {
+        if (isTransientSupabaseError(error)) {
+          setJournalItems((currentEntries) => [nextEntry, ...currentEntries])
+          setJournalSyncStatus('Supabase is unreachable right now, so this journal entry was saved only on this device.')
+          setJournalSyncTone('neutral')
+          setJournalForm({ title: '', detail: '' })
+          journalTitleRef.current?.focus()
+          return
+        }
+
         setJournalSyncStatus(`Unable to save this journal entry to Supabase: ${error}`)
         setJournalSyncTone('error')
         return
@@ -1289,6 +1408,13 @@ function App() {
       const { error } = await deleteJournalEntry(entryId)
 
       if (error) {
+        if (isTransientSupabaseError(error)) {
+          setJournalItems((currentEntries) => currentEntries.filter((entry) => entry.id !== entryId))
+          setJournalSyncStatus('Supabase is unreachable right now, so this journal removal happened only on this device.')
+          setJournalSyncTone('neutral')
+          return
+        }
+
         setJournalSyncStatus(`Unable to remove this journal entry from Supabase: ${error}`)
         setJournalSyncTone('error')
         return
@@ -1305,6 +1431,15 @@ function App() {
     const { item, error } = await updatePrayerRequest(itemId, updates)
 
     if (error) {
+      if (isTransientSupabaseError(error)) {
+        setFocusItems((currentItems) =>
+          currentItems.map((entry) => (entry.id === itemId ? { ...entry, ...updates } : entry)),
+        )
+        setRequestSyncStatus('Supabase is unreachable right now, so this workflow change was saved only on this device.')
+        setRequestSyncTone('neutral')
+        return { ...(focusItems.find((entry) => entry.id === itemId) ?? {}), ...updates }
+      }
+
       setRequestSyncStatus(`${failurePrefix}: ${error}`)
       setRequestSyncTone('error')
       return null

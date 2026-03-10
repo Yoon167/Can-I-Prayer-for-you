@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
+import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
 
 const prayerRequestsTable = 'prayer_requests'
 
@@ -47,18 +48,22 @@ export async function listPrayerRequests() {
     return { items: [], error: null }
   }
 
-  const { data, error } = await supabase
-    .from(prayerRequestsTable)
-    .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
-    .order('created_at', { ascending: false })
+  try {
+    const { data, error } = await supabase
+      .from(prayerRequestsTable)
+      .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
+      .order('created_at', { ascending: false })
 
-  if (error) {
-    return { items: [], error: error.message }
-  }
+    if (error) {
+      return { items: [], error: normalizeSupabaseSyncError(error, 'prayer requests') }
+    }
 
-  return {
-    items: data.map(normalizePrayerRequestRow),
-    error: null,
+    return {
+      items: data.map(normalizePrayerRequestRow),
+      error: null,
+    }
+  } catch (error) {
+    return { items: [], error: normalizeSupabaseSyncError(error, 'prayer requests') }
   }
 }
 
@@ -67,19 +72,23 @@ export async function createPrayerRequest(item) {
     return { item, error: null }
   }
 
-  const { data, error } = await supabase
-    .from(prayerRequestsTable)
-    .insert(buildPrayerRequestPayload(item))
-    .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from(prayerRequestsTable)
+      .insert(buildPrayerRequestPayload(item))
+      .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
+      .single()
 
-  if (error) {
-    return { item: null, error: error.message }
-  }
+    if (error) {
+      return { item: null, error: normalizeSupabaseSyncError(error, 'prayer requests') }
+    }
 
-  return {
-    item: normalizePrayerRequestRow(data),
-    error: null,
+    return {
+      item: normalizePrayerRequestRow(data),
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeSupabaseSyncError(error, 'prayer requests') }
   }
 }
 
@@ -107,20 +116,24 @@ export async function updatePrayerRequest(itemId, updates) {
 
   delete payload.id
 
-  const { data, error } = await supabase
-    .from(prayerRequestsTable)
-    .update(payload)
-    .eq('id', itemId)
-    .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from(prayerRequestsTable)
+      .update(payload)
+      .eq('id', itemId)
+      .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
+      .single()
 
-  if (error) {
-    return { item: null, error: error.message }
-  }
+    if (error) {
+      return { item: null, error: normalizeSupabaseSyncError(error, 'prayer requests') }
+    }
 
-  return {
-    item: normalizePrayerRequestRow(data),
-    error: null,
+    return {
+      item: normalizePrayerRequestRow(data),
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeSupabaseSyncError(error, 'prayer requests') }
   }
 }
 
@@ -129,10 +142,16 @@ export async function deletePrayerRequest(itemId) {
     return { error: null }
   }
 
-  const { error } = await supabase.from(prayerRequestsTable).delete().eq('id', itemId)
+  try {
+    const { error } = await supabase.from(prayerRequestsTable).delete().eq('id', itemId)
 
-  return {
-    error: error ? error.message : null,
+    return {
+      error: error ? normalizeSupabaseSyncError(error, 'prayer requests') : null,
+    }
+  } catch (error) {
+    return {
+      error: normalizeSupabaseSyncError(error, 'prayer requests'),
+    }
   }
 }
 

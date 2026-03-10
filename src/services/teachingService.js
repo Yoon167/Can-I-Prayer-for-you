@@ -1,5 +1,6 @@
 import { getDayIndex, teachingLibrary } from '../data/dailyContent.js'
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
+import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
 
 const dailyTeachingsTable = 'daily_teachings'
 
@@ -52,24 +53,28 @@ export async function getFeaturedTeaching(date = new Date()) {
     return { item: getFallbackTeaching(date), error: null }
   }
 
-  const todayKey = getTodayDateKey(date)
-  const { data, error } = await supabase
-    .from(dailyTeachingsTable)
-    .select('id, publish_date, title, speaker, theme, summary, source, link')
-    .lte('publish_date', todayKey)
-    .order('publish_date', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  try {
+    const todayKey = getTodayDateKey(date)
+    const { data, error } = await supabase
+      .from(dailyTeachingsTable)
+      .select('id, publish_date, title, speaker, theme, summary, source, link')
+      .lte('publish_date', todayKey)
+      .order('publish_date', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-  if (error) {
-    return { item: getFallbackTeaching(date), error: error.message }
+    if (error) {
+      return { item: getFallbackTeaching(date), error: normalizeSupabaseSyncError(error, 'daily teaching') }
+    }
+
+    if (!data) {
+      return { item: getFallbackTeaching(date), error: null }
+    }
+
+    return { item: normalizeTeachingRow(data), error: null }
+  } catch (error) {
+    return { item: getFallbackTeaching(date), error: normalizeSupabaseSyncError(error, 'daily teaching') }
   }
-
-  if (!data) {
-    return { item: getFallbackTeaching(date), error: null }
-  }
-
-  return { item: normalizeTeachingRow(data), error: null }
 }
 
 export async function saveFeaturedTeaching(teaching) {
@@ -77,17 +82,21 @@ export async function saveFeaturedTeaching(teaching) {
     return { item: { ...teaching, isLive: false }, error: null }
   }
 
-  const { data, error } = await supabase
-    .from(dailyTeachingsTable)
-    .upsert(buildTeachingPayload(teaching), { onConflict: 'publish_date' })
-    .select('id, publish_date, title, speaker, theme, summary, source, link')
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from(dailyTeachingsTable)
+      .upsert(buildTeachingPayload(teaching), { onConflict: 'publish_date' })
+      .select('id, publish_date, title, speaker, theme, summary, source, link')
+      .single()
 
-  if (error) {
-    return { item: null, error: error.message }
+    if (error) {
+      return { item: null, error: normalizeSupabaseSyncError(error, 'daily teaching') }
+    }
+
+    return { item: normalizeTeachingRow(data), error: null }
+  } catch (error) {
+    return { item: null, error: normalizeSupabaseSyncError(error, 'daily teaching') }
   }
-
-  return { item: normalizeTeachingRow(data), error: null }
 }
 
 export function subscribeToFeaturedTeaching(onItemChange, onError) {

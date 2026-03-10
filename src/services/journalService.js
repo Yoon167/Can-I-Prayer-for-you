@@ -1,4 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
+import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
 
 const journalEntriesTable = 'journal_entries'
 
@@ -27,18 +28,22 @@ export async function listJournalEntries() {
     return { items: [], error: null }
   }
 
-  const { data, error } = await supabase
-    .from(journalEntriesTable)
-    .select('id, title, detail, entry_date, created_at')
-    .order('created_at', { ascending: false })
+  try {
+    const { data, error } = await supabase
+      .from(journalEntriesTable)
+      .select('id, title, detail, entry_date, created_at')
+      .order('created_at', { ascending: false })
 
-  if (error) {
-    return { items: [], error: error.message }
-  }
+    if (error) {
+      return { items: [], error: normalizeSupabaseSyncError(error, 'your journal') }
+    }
 
-  return {
-    items: data.map(normalizeJournalEntryRow),
-    error: null,
+    return {
+      items: data.map(normalizeJournalEntryRow),
+      error: null,
+    }
+  } catch (error) {
+    return { items: [], error: normalizeSupabaseSyncError(error, 'your journal') }
   }
 }
 
@@ -47,19 +52,23 @@ export async function createJournalEntry(entry) {
     return { item: entry, error: null }
   }
 
-  const { data, error } = await supabase
-    .from(journalEntriesTable)
-    .insert(buildJournalEntryPayload(entry))
-    .select('id, title, detail, entry_date, created_at')
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from(journalEntriesTable)
+      .insert(buildJournalEntryPayload(entry))
+      .select('id, title, detail, entry_date, created_at')
+      .single()
 
-  if (error) {
-    return { item: null, error: error.message }
-  }
+    if (error) {
+      return { item: null, error: normalizeSupabaseSyncError(error, 'your journal') }
+    }
 
-  return {
-    item: normalizeJournalEntryRow(data),
-    error: null,
+    return {
+      item: normalizeJournalEntryRow(data),
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeSupabaseSyncError(error, 'your journal') }
   }
 }
 
@@ -68,10 +77,16 @@ export async function deleteJournalEntry(entryId) {
     return { error: null }
   }
 
-  const { error } = await supabase.from(journalEntriesTable).delete().eq('id', entryId)
+  try {
+    const { error } = await supabase.from(journalEntriesTable).delete().eq('id', entryId)
 
-  return {
-    error: error ? error.message : null,
+    return {
+      error: error ? normalizeSupabaseSyncError(error, 'your journal') : null,
+    }
+  } catch (error) {
+    return {
+      error: normalizeSupabaseSyncError(error, 'your journal'),
+    }
   }
 }
 
