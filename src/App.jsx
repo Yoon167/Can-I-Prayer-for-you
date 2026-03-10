@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import AnsweredPrayersPanel from './components/AnsweredPrayersPanel.jsx'
+import AnalyticsDashboard from './components/AnalyticsDashboard.jsx'
 import BibleView from './components/BibleView.jsx'
 import AppNavbar from './components/AppNavbar.jsx'
 import AppLoadingScreen from './components/AppLoadingScreen.jsx'
@@ -219,6 +220,7 @@ function App() {
   const journalTitleRef = useRef(null)
   const swipeStartXRef = useRef(null)
   const swipePointerIdRef = useRef(null)
+  const authUserId = authSession?.userId ?? ''
 
   function applyAuthSession(session) {
     setAuthSession(session)
@@ -696,7 +698,7 @@ function App() {
       isMounted = false
       unsubscribe()
     }
-  }, [sharedTeachingEnabled])
+  }, [sharedTeachingEnabled, authUserId])
 
   useEffect(() => {
     if (!sharedPrayerRequestsEnabled) {
@@ -745,7 +747,7 @@ function App() {
       isMounted = false
       unsubscribe()
     }
-  }, [sharedPrayerRequestsEnabled])
+  }, [sharedPrayerRequestsEnabled, authUserId])
 
   useEffect(() => {
     if (!sharedJournalEnabled) {
@@ -794,7 +796,7 @@ function App() {
       isMounted = false
       unsubscribe()
     }
-  }, [sharedJournalEnabled])
+  }, [sharedJournalEnabled, authUserId])
 
   const activeRole = authSession?.role ?? selectedRole
   const visibleFocusItems = focusItems.filter((item) => {
@@ -926,6 +928,15 @@ function App() {
   const activeFocusItems = visibleFocusItems.filter((item) => !item.answeredAt)
   const answeredFocusItems = visibleFocusItems.filter((item) => item.answeredAt)
   const completedFocusItems = activeFocusItems.filter((item) => item.completed).length
+  const testimonySharedCount = visibleFocusItems.filter((item) => item.testimonyShared).length
+  const followUpRequestedCount = visibleFocusItems.filter((item) => item.followUpStatus === 'requested').length
+  const sensitivePendingCount = visibleFocusItems.filter(
+    (item) => !item.answeredAt && item.visibilityScope === 'pastoral',
+  ).length
+  const prayedCoverageCount = visibleFocusItems.filter((item) => item.workflowStatus === 'prayed').length
+  const answerRate = activeFocusItems.length + answeredFocusItems.length
+    ? Math.round((answeredFocusItems.length / (activeFocusItems.length + answeredFocusItems.length)) * 100)
+    : 0
   const currentDeckCard = effectivePrayerQueue[0]
   const nextDeckCard = effectivePrayerQueue[1]
   const filteredFocusItems = activeFocusItems.filter((item) => {
@@ -2198,6 +2209,17 @@ function App() {
                 onPointerCancel={handleDeckPointerCancel}
               />
             ) : null}
+            <AnalyticsDashboard
+              activeRoleLabel={activeRoleConfig.label}
+              openRequests={activeFocusItems.length}
+              answeredRequests={answeredFocusItems.length}
+              prayedCoverageCount={prayedCoverageCount}
+              followUpRequestedCount={followUpRequestedCount}
+              sensitivePendingCount={sensitivePendingCount}
+              testimonySharedCount={testimonySharedCount}
+              answerRate={answerRate}
+              sharedPrayerRequestsEnabled={sharedPrayerRequestsEnabled}
+            />
             {showPastoralReview ? (
               <PastoralReviewPanel
                 pastoralReviewItems={effectivePastoralReviewItems}
@@ -2223,7 +2245,7 @@ function App() {
               requestVisibilityScope={requestVisibilityScope}
               setRequestVisibilityScope={setRequestVisibilityScope}
               memberDisplayName={memberDisplayName}
-              authUserId={authSession.userId}
+              authUserId={authUserId}
               handleAddPrayerRequest={handleAddPrayerRequest}
               filterOptions={filterOptions}
               focusFilter={focusFilter}
@@ -2243,7 +2265,7 @@ function App() {
             />
             <AnsweredPrayersPanel
               answeredFocusItems={answeredFocusItems}
-              authUserId={authSession.userId}
+              authUserId={authUserId}
               canManagePrayerWorkflow={canManagePrayerWorkflow}
               handleRestoreAnswered={handleRestoreAnswered}
               handleAnsweredNoteChange={handleAnsweredNoteChange}
@@ -2303,7 +2325,7 @@ function App() {
       {currentView === 'praises' ? (
         <PraisesView
           answeredFocusItems={answeredFocusItems}
-          authUserId={authSession.userId}
+          authUserId={authUserId}
           canManagePrayerWorkflow={canManagePrayerWorkflow}
           handleRestoreAnswered={handleRestoreAnswered}
           handleAnsweredNoteChange={handleAnsweredNoteChange}

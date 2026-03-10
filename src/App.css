@@ -425,7 +425,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: -0.03em;
-  color: var(--color-ink);
+  color: #241911;
 }
 
 .hero-copy h1 {
@@ -438,7 +438,7 @@
   max-width: 54ch;
   margin: 1.25rem 0 0;
   font-size: 1.05rem;
-  color: var(--color-muted);
+  color: #56473a;
 }
 
 .hero-actions {
@@ -543,14 +543,56 @@
 
 .home-summary-grid,
 .profile-grid-cards,
-.praise-list {
+.praise-list,
+.analytics-grid {
   display: grid;
   gap: 1rem;
 }
 
 .home-summary-grid,
-.profile-grid-cards {
+.profile-grid-cards,
+.analytics-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.analytics-panel {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.42), transparent 30%),
+    rgba(255, 251, 245, 0.9);
+}
+
+.analytics-heading {
+  align-items: center;
+}
+
+.analytics-summary {
+  margin-top: 0.4rem;
+  color: #5d4d3f;
+}
+
+.analytics-tag {
+  background: rgba(48, 71, 59, 0.1);
+  color: #30473b;
+}
+
+.analytics-card {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(118, 85, 42, 0.12);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.analytics-card p {
+  margin: 0;
+  color: #5d4d3f;
+}
+
+.analytics-value {
+  font-family: var(--font-display);
+  font-size: 2.15rem;
+  color: #241911;
 }
 
 .home-summary-card,
@@ -753,6 +795,10 @@
 
 .follow-up-message p {
   margin: 0;
+}
+
+.follow-up-message .moment-time {
+  color: #7a614f;
 }
 
 .follow-up-message-requester {
@@ -1076,6 +1122,12 @@
   border-left: 4px solid var(--color-accent);
 }
 
+.focus-item p,
+.focus-item span,
+.focus-item button {
+  color: inherit;
+}
+
 .focus-item-main {
   display: grid;
   gap: 0.35rem;
@@ -1293,6 +1345,11 @@
 .answered-card h3 {
   margin: 0;
   color: var(--color-ink);
+}
+
+.answered-card p,
+.answered-card label {
+  color: #4e4034;
 }
 
 .answered-note-label {
