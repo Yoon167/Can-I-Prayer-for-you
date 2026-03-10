@@ -1,5 +1,9 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
-import { normalizeSupabaseSyncError, retrySupabaseOperation } from './supabaseSyncUtils.js'
+import {
+  createResilientRealtimeSubscription,
+  normalizeSupabaseSyncError,
+  retrySupabaseOperation,
+} from './supabaseSyncUtils.js'
 
 const prayerRequestsTable = 'prayer_requests'
 const prayerRequestSelectColumns = 'id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, owner_user_id, visibility_scope, follow_up_status, follow_up_messages, prayed_notice, prayed_notified_at, prayed_by, testimony_text, testimony_shared, created_at'
@@ -278,25 +282,13 @@ export function subscribeToPrayerRequests(onItemsChange, onError) {
     return () => {}
   }
 
-  const channel = supabase
-    .channel('prayer-requests-sync')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: prayerRequestsTable },
-      async () => {
-        const { items, error } = await listPrayerRequests()
-
-        if (error) {
-          onError?.(error)
-          return
-        }
-
-        onItemsChange(items)
-      },
-    )
-    .subscribe()
-
-  return () => {
-    supabase.removeChannel(channel)
-  }
+  return createResilientRealtimeSubscription({
+    supabaseClient: supabase,
+    channelName: 'prayer-requests-sync',
+    table: prayerRequestsTable,
+    resourceLabel: 'prayer requests',
+    loadLatest: listPrayerRequests,
+    onData: ({ items }) => onItemsChange(items),
+    onError,
+  })
 }

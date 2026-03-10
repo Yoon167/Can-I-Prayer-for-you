@@ -1,5 +1,9 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
-import { normalizeSupabaseSyncError, retrySupabaseOperation } from './supabaseSyncUtils.js'
+import {
+  createResilientRealtimeSubscription,
+  normalizeSupabaseSyncError,
+  retrySupabaseOperation,
+} from './supabaseSyncUtils.js'
 
 const journalEntriesTable = 'journal_entries'
 
@@ -106,25 +110,13 @@ export function subscribeToJournalEntries(onItemsChange, onError) {
     return () => {}
   }
 
-  const channel = supabase
-    .channel('journal-entries-sync')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: journalEntriesTable },
-      async () => {
-        const { items, error } = await listJournalEntries()
-
-        if (error) {
-          onError?.(error)
-          return
-        }
-
-        onItemsChange(items)
-      },
-    )
-    .subscribe()
-
-  return () => {
-    supabase.removeChannel(channel)
-  }
+  return createResilientRealtimeSubscription({
+    supabaseClient: supabase,
+    channelName: 'journal-entries-sync',
+    table: journalEntriesTable,
+    resourceLabel: 'your journal',
+    loadLatest: listJournalEntries,
+    onData: ({ items }) => onItemsChange(items),
+    onError,
+  })
 }

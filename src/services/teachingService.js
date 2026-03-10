@@ -1,6 +1,10 @@
 import { getDayIndex, teachingLibrary } from '../data/dailyContent.js'
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
-import { normalizeSupabaseSyncError, retrySupabaseOperation } from './supabaseSyncUtils.js'
+import {
+  createResilientRealtimeSubscription,
+  normalizeSupabaseSyncError,
+  retrySupabaseOperation,
+} from './supabaseSyncUtils.js'
 
 const dailyTeachingsTable = 'daily_teachings'
 
@@ -112,25 +116,13 @@ export function subscribeToFeaturedTeaching(onItemChange, onError) {
     return () => {}
   }
 
-  const channel = supabase
-    .channel('daily-teachings-sync')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: dailyTeachingsTable },
-      async () => {
-        const { item, error } = await getFeaturedTeaching()
-
-        if (error) {
-          onError?.(error)
-          return
-        }
-
-        onItemChange(item)
-      },
-    )
-    .subscribe()
-
-  return () => {
-    supabase.removeChannel(channel)
-  }
+  return createResilientRealtimeSubscription({
+    supabaseClient: supabase,
+    channelName: 'daily-teachings-sync',
+    table: dailyTeachingsTable,
+    resourceLabel: 'daily teaching',
+    loadLatest: getFeaturedTeaching,
+    onData: ({ item }) => onItemChange(item),
+    onError,
+  })
 }
