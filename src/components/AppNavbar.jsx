@@ -44,6 +44,36 @@ function NavIcon({ id, active }) {
     )
   }
 
+  if (id === 'bible') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="nav-icon-svg">
+        <path
+          d="M7 5.5h8.5a2.5 2.5 0 0 1 2.5 2.5v10H9a2 2 0 0 0-2 2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M7 5.5A2.5 2.5 0 0 0 4.5 8v10.5h10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M12 9.5v5M9.5 12h5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="nav-icon-svg">
       <path
@@ -69,6 +99,7 @@ function AppNavbar({ currentView, onChangeView }) {
   const navItems = [
     { id: 'home', label: 'Home' },
     { id: 'dashboard', label: 'Prayer Hub' },
+    { id: 'bible', label: 'Bible' },
     { id: 'profile', label: 'Profile' },
     { id: 'praises', label: 'Praises' },
   ]

@@ -924,6 +924,11 @@
   margin: 0;
 }
 
+.swipe-live-status {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
 .review-card,
 .space-card,
 .core-card {
@@ -1110,6 +1115,76 @@
 
 .profile-save-action {
   justify-self: start;
+}
+
+.member-access-list,
+.bible-prayer-prompts {
+  display: grid;
+  gap: 1rem;
+}
+
+.member-access-card,
+.bible-passage-card {
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  border-radius: 22px;
+  border: 1px solid rgba(118, 85, 42, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.member-access-card {
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.9fr);
+  align-items: end;
+}
+
+.member-access-copy,
+.member-access-actions,
+.bible-search-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.member-access-copy h3,
+.bible-passage-card h3 {
+  margin: 0;
+  color: var(--color-ink);
+}
+
+.member-access-copy p {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.member-access-actions {
+  align-items: stretch;
+}
+
+.bible-grid {
+  align-items: start;
+}
+
+.bible-panel,
+.bible-panel-side {
+  margin-top: 1.25rem;
+}
+
+.bible-search-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 1rem;
+}
+
+.bible-filter-row {
+  margin-bottom: 1rem;
+}
+
+.bible-passage-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--color-ink);
 }
 
 .ghost-action {
@@ -1316,12 +1391,21 @@
     grid-column: span 1;
   }
 
+  .member-access-card,
+  .bible-search-form {
+    grid-template-columns: 1fr;
+  }
+
   .hero-copy h1 {
     max-width: 14ch;
   }
 }
 
 @media (max-width: 640px) {
+  html {
+    font-size: 15px;
+  }
+
   .loading-shell {
     width: min(100% - 1rem, 100%);
     padding: 1rem 0 4rem;
@@ -1372,7 +1456,7 @@
 
   .app-navbar-links {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     width: 100%;
     gap: 0.35rem;
   }
@@ -1380,18 +1464,18 @@
   .nav-button {
     justify-content: center;
     flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.6rem 0.35rem;
-    border-radius: 20px;
+    gap: 0.28rem;
+    padding: 0.52rem 0.2rem;
+    border-radius: 18px;
   }
 
   .nav-icon-wrap {
-    width: 2.15rem;
-    height: 2.15rem;
+    width: 2rem;
+    height: 2rem;
   }
 
   .nav-label {
-    font-size: 0.72rem;
+    font-size: 0.68rem;
   }
 
   .auth-actions {
@@ -1465,12 +1549,26 @@
   }
 
   .hero-copy h1 {
-    font-size: 2.7rem;
+    font-size: 2.35rem;
   }
 
   .panel h2,
   .hero-card h2,
   .accent-panel blockquote {
-    font-size: 1.6rem;
+    font-size: 1.35rem;
+  }
+
+  .auth-copy h1,
+  .loading-card h1 {
+    font-size: 2.2rem;
+  }
+
+  .auth-text,
+  .hero-text,
+  .form-helper,
+  .request-sync-status,
+  .member-access-copy p,
+  .bible-passage-text {
+    font-size: 0.95rem;
   }
 }

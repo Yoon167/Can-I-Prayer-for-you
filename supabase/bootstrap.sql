@@ -1,15 +1,64 @@
 create extension if not exists pgcrypto;
 
+create table if not exists public.member_accounts (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text not null default '',
+  role text not null default 'member',
+  full_name text not null default '',
+  display_name text not null default '',
+  phone text not null default '',
+  address text not null default '',
+  church_name text not null default '',
+  pastor_name text not null default '',
+  bio text not null default '',
+  avatar_url text not null default '',
+  created_at timestamptz not null default timezone('utc', now()),
+  updated_at timestamptz not null default timezone('utc', now()),
+  constraint member_accounts_role_check check (role in ('member', 'intercessor', 'pastor', 'prayer-core'))
+);
+
+alter table public.member_accounts
+  add column if not exists email text not null default '',
+  add column if not exists role text not null default 'member',
+  add column if not exists full_name text not null default '',
+  add column if not exists display_name text not null default '',
+  add column if not exists phone text not null default '',
+  add column if not exists address text not null default '',
+  add column if not exists church_name text not null default '',
+  add column if not exists pastor_name text not null default '',
+  add column if not exists bio text not null default '',
+  add column if not exists avatar_url text not null default '',
+  add column if not exists created_at timestamptz not null default timezone('utc', now()),
+  add column if not exists updated_at timestamptz not null default timezone('utc', now());
+
+alter table public.member_accounts enable row level security;
+
+create or replace function public.prayer_app_role_for_user(target_user_id uuid)
+returns text
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (
+      select member_accounts.role
+      from public.member_accounts
+      where member_accounts.user_id = target_user_id
+      limit 1
+    ),
+    auth.jwt() -> 'app_metadata' ->> 'role',
+    auth.jwt() -> 'user_metadata' ->> 'role',
+    'member'
+  )
+$$;
+
 create or replace function public.prayer_app_current_role()
 returns text
 language sql
 stable
 as $$
-  select coalesce(
-    auth.jwt() -> 'app_metadata' ->> 'role',
-    auth.jwt() -> 'user_metadata' ->> 'role',
-    ''
-  )
+  select public.prayer_app_role_for_user(auth.uid())
 $$;
 
 create or replace function public.prayer_app_is_valid_role()
@@ -27,6 +76,102 @@ stable
 as $$
   select public.prayer_app_current_role() in ('pastor', 'prayer-core')
 $$;
+
+create or replace function public.touch_member_accounts_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = timezone('utc', now());
+  return new;
+end;
+$$;
+
+create or replace function public.enforce_member_account_changes()
+returns trigger
+language plpgsql
+as $$
+declare
+  actor_role text := public.prayer_app_current_role();
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication is required to manage member accounts.';
+  end if;
+
+  if tg_op = 'INSERT' then
+    if actor_role not in ('pastor', 'prayer-core') and new.role <> 'member' then
+      raise exception 'Only pastors or prayer-core can assign elevated member roles.';
+    end if;
+  end if;
+
+  if tg_op = 'UPDATE' then
+    if actor_role not in ('pastor', 'prayer-core') and old.role is distinct from new.role then
+      raise exception 'Only pastors or prayer-core can change member roles.';
+    end if;
+  end if;
+
+  new.updated_at = timezone('utc', now());
+  return new;
+end;
+$$;
+
+drop trigger if exists member_accounts_updated_at on public.member_accounts;
+drop trigger if exists member_accounts_guard on public.member_accounts;
+
+create trigger member_accounts_updated_at
+before update on public.member_accounts
+for each row
+execute function public.touch_member_accounts_updated_at();
+
+create trigger member_accounts_guard
+before insert or update on public.member_accounts
+for each row
+execute function public.enforce_member_account_changes();
+
+drop policy if exists "Users can read their own member account" on public.member_accounts;
+drop policy if exists "Privileged users can read all member accounts" on public.member_accounts;
+drop policy if exists "Users can insert their own member account" on public.member_accounts;
+drop policy if exists "Privileged users can insert member accounts" on public.member_accounts;
+drop policy if exists "Users can update their own member account" on public.member_accounts;
+drop policy if exists "Privileged users can update all member accounts" on public.member_accounts;
+
+create policy "Users can read their own member account"
+on public.member_accounts
+for select
+to authenticated
+using (auth.uid() = user_id);
+
+create policy "Privileged users can read all member accounts"
+on public.member_accounts
+for select
+to authenticated
+using (public.prayer_app_is_privileged_role());
+
+create policy "Users can insert their own member account"
+on public.member_accounts
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "Privileged users can insert member accounts"
+on public.member_accounts
+for insert
+to authenticated
+with check (public.prayer_app_is_privileged_role());
+
+create policy "Users can update their own member account"
+on public.member_accounts
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy "Privileged users can update all member accounts"
+on public.member_accounts
+for update
+to authenticated
+using (public.prayer_app_is_privileged_role())
+with check (public.prayer_app_is_privileged_role());
 
 create table if not exists public.prayer_requests (
   id text primary key default gen_random_uuid()::text,

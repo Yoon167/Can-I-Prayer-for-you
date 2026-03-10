@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js'
+import { getMemberAccount, upsertMemberAccount } from './memberDirectoryService.js'
 import { formatAnsweredDate } from '../utils/prayerAppUtils.js'
 
 const localAccountsStorageKey = 'prayer-app-local-accounts'
@@ -136,11 +137,37 @@ function normalizeMemberProfile(profile) {
 
 function getMemberProfile(user) {
   const normalizedProfile = normalizeMemberProfile(user?.user_metadata?.memberProfile)
-  const resolvedRole = user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(normalizedProfile.accountType)
+  const resolvedRole =
+    user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(normalizedProfile.accountType)
 
   return {
     ...normalizedProfile,
     accountType: mapRoleToAccountType(resolvedRole),
+  }
+}
+
+function pickProfileValue(primaryValue, fallbackValue) {
+  return typeof primaryValue === 'string' && primaryValue.trim() ? primaryValue : fallbackValue
+}
+
+function mergeMemberProfile(baseProfile, memberAccount, resolvedRole) {
+  if (!memberAccount) {
+    return {
+      ...baseProfile,
+      accountType: mapRoleToAccountType(resolvedRole),
+    }
+  }
+
+  return {
+    fullName: pickProfileValue(memberAccount.fullName, baseProfile.fullName),
+    displayName: pickProfileValue(memberAccount.displayName, baseProfile.displayName),
+    phone: pickProfileValue(memberAccount.phone, baseProfile.phone),
+    address: pickProfileValue(memberAccount.address, baseProfile.address),
+    churchName: pickProfileValue(memberAccount.churchName, baseProfile.churchName),
+    pastorName: pickProfileValue(memberAccount.pastorName, baseProfile.pastorName),
+    bio: pickProfileValue(memberAccount.bio, baseProfile.bio),
+    accountType: mapRoleToAccountType(resolvedRole),
+    avatarUrl: pickProfileValue(memberAccount.avatarUrl, baseProfile.avatarUrl),
   }
 }
 
@@ -161,6 +188,53 @@ function getSessionRole(session) {
     session?.user?.user_metadata?.role ??
     mapAccountTypeToRole(getMemberProfile(session?.user).accountType)
   )
+}
+
+async function syncSupabaseMemberContext(user) {
+  const fallbackProfile = getMemberProfile(user)
+  const fallbackRole =
+    user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(fallbackProfile.accountType)
+
+  let memberAccount = null
+
+  try {
+    const { item } = await getMemberAccount(user?.id)
+    memberAccount = item
+  } catch {
+    memberAccount = null
+  }
+
+  const resolvedRole = memberAccount?.role ?? fallbackRole
+  const mergedProfile = mergeMemberProfile(fallbackProfile, memberAccount, resolvedRole)
+
+  try {
+    const { item } = await upsertMemberAccount({
+      userId: user?.id ?? '',
+      email: user?.email ?? memberAccount?.email ?? '',
+      role: resolvedRole,
+      memberProfile: mergedProfile,
+    })
+
+    if (item) {
+      return {
+        role: item.role,
+        memberProfile: mergeMemberProfile(mergedProfile, item, item.role),
+      }
+    }
+  } catch {
+    // Fall back to auth metadata when the member directory is not ready yet.
+  }
+
+  return {
+    role: resolvedRole,
+    memberProfile: mergedProfile,
+  }
+}
+
+async function buildSupabaseSessionFromUser(user) {
+  const { role, memberProfile } = await syncSupabaseMemberContext(user)
+
+  return buildSession(role, user?.email ?? '', 'supabase', memberProfile, user?.id ?? '')
 }
 
 export async function signInToPrayerApp({ email, password }) {
@@ -184,17 +258,8 @@ export async function signInToPrayerApp({ email, password }) {
 
     clearAuthRateLimitCooldown()
 
-    const sessionRole = getSessionRole(data.session)
-    const memberProfile = getMemberProfile(data.user)
-
     return {
-      session: buildSession(
-        sessionRole,
-        data.user?.email ?? '',
-        'supabase',
-        memberProfile,
-        data.user?.id ?? '',
-      ),
+      session: await buildSupabaseSessionFromUser(data.user ?? data.session?.user),
     }
   }
 
@@ -262,7 +327,7 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
     }
 
     return {
-      session: buildSession(role, data.user?.email ?? '', 'supabase', normalizedProfile, data.user?.id ?? ''),
+      session: await buildSupabaseSessionFromUser(data.user),
       message: 'Account created successfully.',
     }
   }
@@ -312,19 +377,13 @@ export async function restorePrayerAppSession(roleOptions) {
     return null
   }
 
-  const sessionRole = getSessionRole(data.session)
+  const nextSession = await buildSupabaseSessionFromUser(data.session.user)
 
-  if (!roleOptions.some((role) => role.id === sessionRole)) {
+  if (!roleOptions.some((role) => role.id === nextSession.role)) {
     return null
   }
 
-  return buildSession(
-    sessionRole,
-    data.session.user?.email ?? '',
-    'supabase',
-    getMemberProfile(data.session.user),
-    data.session.user?.id ?? '',
-  )
+  return nextSession
 }
 
 export async function savePrayerAppMemberProfile(profile, currentSession) {
@@ -382,17 +441,25 @@ export async function savePrayerAppMemberProfile(profile, currentSession) {
     return { error: error.message }
   }
 
-  const sessionRole = user.app_metadata?.role ?? mergedMetadata.role ?? null
+  const { item: savedAccount, error: directoryError } = await upsertMemberAccount({
+    userId: user.id,
+    email: data.user?.email ?? user.email ?? currentSession?.email ?? '',
+    role,
+    memberProfile: normalizedProfile,
+  })
+
+  const sessionRole = savedAccount?.role ?? user.app_metadata?.role ?? mergedMetadata.role ?? null
+  const nextProfile = mergeMemberProfile(normalizedProfile, savedAccount, sessionRole ?? role)
 
   return {
-    error: null,
-    profile: normalizedProfile,
+    error: directoryError ?? null,
+    profile: nextProfile,
     session: sessionRole
       ? buildSession(
           sessionRole,
           data.user?.email ?? user.email ?? '',
           'supabase',
-          normalizedProfile,
+          nextProfile,
           data.user?.id ?? user.id,
         )
       : null,
@@ -412,22 +479,33 @@ export function subscribeToPrayerAuthChanges(roleOptions, onSessionChange) {
       return
     }
 
-    const sessionRole = getSessionRole(session)
+    buildSupabaseSessionFromUser(session.user)
+      .then((nextSession) => {
+        if (!roleOptions.some((role) => role.id === nextSession.role)) {
+          onSessionChange(null)
+          return
+        }
 
-    if (!roleOptions.some((role) => role.id === sessionRole)) {
-      onSessionChange(null)
-      return
-    }
+        onSessionChange(nextSession)
+      })
+      .catch(() => {
+        const sessionRole = getSessionRole(session)
 
-    onSessionChange(
-      buildSession(
-        sessionRole,
-        session.user?.email ?? '',
-        'supabase',
-        getMemberProfile(session.user),
-        session.user?.id ?? '',
-      ),
-    )
+        if (!roleOptions.some((role) => role.id === sessionRole)) {
+          onSessionChange(null)
+          return
+        }
+
+        onSessionChange(
+          buildSession(
+            sessionRole,
+            session.user?.email ?? '',
+            'supabase',
+            getMemberProfile(session.user),
+            session.user?.id ?? '',
+          ),
+        )
+      })
   })
 
   return () => {

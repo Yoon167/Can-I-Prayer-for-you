@@ -1,3 +1,5 @@
+import MemberAccessPanel from './MemberAccessPanel.jsx'
+
 function ProfileView({
   authSession,
   activeRoleConfig,
@@ -17,6 +19,14 @@ function ProfileView({
   teachingTone,
   handleTeachingChange,
   handleSaveTeaching,
+  canManageMembers,
+  members,
+  memberDirectoryBusy,
+  memberDirectoryStatus,
+  memberDirectoryTone,
+  handleRefreshMemberDirectory,
+  handleUpdateMemberRole,
+  roleOptions,
 }) {
   const memberIdentity = memberProfile.displayName || memberProfile.fullName || 'Not saved yet'
   const accessLevelLabel = activeRoleConfig.label
@@ -305,6 +315,19 @@ function ProfileView({
             </button>
           </form>
         </article>
+      ) : null}
+
+      {canManageMembers ? (
+        <MemberAccessPanel
+          authSession={authSession}
+          members={members}
+          roleOptions={roleOptions}
+          busy={memberDirectoryBusy}
+          status={memberDirectoryStatus}
+          tone={memberDirectoryTone}
+          onRefresh={handleRefreshMemberDirectory}
+          onUpdateRole={handleUpdateMemberRole}
+        />
       ) : null}
     </section>
   )

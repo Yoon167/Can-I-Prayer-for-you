@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import AnsweredPrayersPanel from './components/AnsweredPrayersPanel.jsx'
+import BibleView from './components/BibleView.jsx'
 import AppNavbar from './components/AppNavbar.jsx'
 import AppLoadingScreen from './components/AppLoadingScreen.jsx'
 import AuthPanel from './components/AuthPanel.jsx'
@@ -36,12 +37,16 @@ import {
 import { isSupabaseConfigured } from './lib/supabaseClient.js'
 import {
   restorePrayerAppSession,
-  signUpToPrayerApp,
   savePrayerAppMemberProfile,
   signInToPrayerApp,
   signOutOfPrayerApp,
+  signUpToPrayerApp,
   subscribeToPrayerAuthChanges,
 } from './services/authService.js'
+import {
+  listMemberAccounts,
+  updateMemberAccountRole,
+} from './services/memberDirectoryService.js'
 import { getDailyHomeContent } from './data/dailyContent.js'
 import { getLiveHomeContent } from './services/liveContentService.js'
 import {
@@ -199,6 +204,11 @@ function App() {
   })
   const [teachingStatus, setTeachingStatus] = useState('')
   const [teachingTone, setTeachingTone] = useState('neutral')
+  const [memberDirectoryItems, setMemberDirectoryItems] = useState([])
+  const [memberDirectoryStatus, setMemberDirectoryStatus] = useState('')
+  const [memberDirectoryTone, setMemberDirectoryTone] = useState('neutral')
+  const [memberDirectoryBusy, setMemberDirectoryBusy] = useState(false)
+  const [lastDeckAction, setLastDeckAction] = useState('')
   const [swipeOffset, setSwipeOffset] = useState(0)
   const requestInputRef = useRef(null)
   const journalTitleRef = useRef(null)
@@ -679,6 +689,8 @@ function App() {
           : 'Member'
   const canManageTeaching =
     activeRole === 'prayer-core' || activeRole === 'pastor'
+  const canManageMembers =
+    authSession?.provider === 'supabase' && (activeRole === 'prayer-core' || activeRole === 'pastor')
   const canRemoveRequests =
     !sharedPrayerRequestsEnabled || activeRole === 'pastor' || activeRole === 'prayer-core'
   const canManagePrayerWorkflow = activeRole === 'intercessor' || activeRole === 'pastor' || activeRole === 'prayer-core'
@@ -686,6 +698,125 @@ function App() {
   const showPastoralReview = activeRole === 'pastor' || activeRole === 'prayer-core'
   const showTeamSpaces = activeRole === 'intercessor' || activeRole === 'prayer-core'
   const showPrayerRhythm = activeRole !== 'pastor'
+
+  function getAccountTypeFromRole(role) {
+    if (role === 'pastor') {
+      return 'pastor'
+    }
+
+    if (role === 'prayer-core') {
+      return 'owner'
+    }
+
+    return 'member'
+  }
+
+  async function handleRefreshMemberDirectory(showSuccessMessage = false) {
+    if (!canManageMembers) {
+      setMemberDirectoryItems([])
+      return
+    }
+
+    setMemberDirectoryBusy(true)
+
+    const { items, error } = await listMemberAccounts()
+
+    if (error) {
+      setMemberDirectoryStatus(`Unable to load registered members: ${error}`)
+      setMemberDirectoryTone('error')
+      setMemberDirectoryBusy(false)
+      return
+    }
+
+    setMemberDirectoryItems(items)
+
+    if (showSuccessMessage) {
+      setMemberDirectoryStatus('Registered members refreshed.')
+      setMemberDirectoryTone('neutral')
+    }
+
+    setMemberDirectoryBusy(false)
+  }
+
+  async function handleUpdateMemberRole(userId, nextRole) {
+    setMemberDirectoryBusy(true)
+
+    const { item, error } = await updateMemberAccountRole(userId, nextRole)
+
+    if (error) {
+      setMemberDirectoryStatus(`Unable to update this member role: ${error}`)
+      setMemberDirectoryTone('error')
+      setMemberDirectoryBusy(false)
+      return
+    }
+
+    setMemberDirectoryItems((currentItems) =>
+      currentItems.map((member) => (member.userId === userId ? item : member)),
+    )
+
+    const updatedRoleLabel = roleOptions.find((role) => role.id === item.role)?.label ?? item.role
+    setMemberDirectoryStatus(`${item.email || 'Member'} is now ${updatedRoleLabel}.`)
+    setMemberDirectoryTone('neutral')
+
+    if (userId === authSession?.userId) {
+      const nextSession = {
+        ...authSession,
+        role: item.role,
+        memberProfile: {
+          ...authSession.memberProfile,
+          fullName: item.fullName,
+          displayName: item.displayName,
+          phone: item.phone,
+          address: item.address,
+          churchName: item.churchName,
+          pastorName: item.pastorName,
+          bio: item.bio,
+          avatarUrl: item.avatarUrl,
+          accountType: getAccountTypeFromRole(item.role),
+        },
+      }
+
+      applyAuthSession(nextSession)
+    }
+
+    setMemberDirectoryBusy(false)
+  }
+
+  useEffect(() => {
+    if (!canManageMembers) {
+      return undefined
+    }
+
+    let isMounted = true
+
+    Promise.resolve().then(async () => {
+      if (!isMounted) {
+        return
+      }
+
+      setMemberDirectoryBusy(true)
+
+      const { items, error } = await listMemberAccounts()
+
+      if (!isMounted) {
+        return
+      }
+
+      if (error) {
+        setMemberDirectoryStatus(`Unable to load registered members: ${error}`)
+        setMemberDirectoryTone('error')
+        setMemberDirectoryBusy(false)
+        return
+      }
+
+      setMemberDirectoryItems(items)
+      setMemberDirectoryBusy(false)
+    })
+
+    return () => {
+      isMounted = false
+    }
+  }, [canManageMembers])
 
   function removeLinkedDeckEntries(focusItemId) {
     if (sharedPrayerRequestsEnabled) {
@@ -1213,6 +1344,11 @@ function App() {
           ? 'Unable to send this request to pastoral review'
           : 'Unable to mark this request as prayed',
       )
+      setLastDeckAction(
+        decision === 'review'
+          ? 'Request moved into pastoral review.'
+          : 'Request marked as prayed in the live queue.',
+      )
       resetSwipeGesture()
       return
     }
@@ -1224,6 +1360,7 @@ function App() {
         { ...currentDeckCard, flaggedAt: formatAnsweredDate() },
         ...currentItems,
       ])
+      setLastDeckAction('Request moved into pastoral review.')
       resetSwipeGesture()
       return
     }
@@ -1232,6 +1369,7 @@ function App() {
       { ...currentDeckCard, prayedAt: formatAnsweredDate() },
       ...currentItems,
     ])
+    setLastDeckAction('Request marked as prayed in the live queue.')
     resetSwipeGesture()
   }
 
@@ -1300,6 +1438,7 @@ function App() {
         flaggedAt: selectedFocusItem.flaggedAt,
         prayedAt: formatAnsweredDate(),
       }, 'Unable to approve this prayer request')
+      setLastDeckAction('Pastoral review approved and moved to prayed.')
       return
     }
 
@@ -1308,6 +1447,7 @@ function App() {
       { ...selectedItem, prayedAt: formatAnsweredDate() },
       ...currentItems,
     ])
+    setLastDeckAction('Pastoral review approved and moved to prayed.')
   }
 
   async function handleReturnToQueue(itemId) {
@@ -1330,6 +1470,7 @@ function App() {
         flaggedAt: null,
         prayedAt: null,
       }, 'Unable to return this request to the queue')
+      setLastDeckAction('Pastoral review request returned to the live queue.')
       return
     }
 
@@ -1342,6 +1483,7 @@ function App() {
       },
       ...currentItems,
     ])
+    setLastDeckAction('Pastoral review request returned to the live queue.')
   }
 
   async function handleSignIn(event) {
@@ -1433,6 +1575,9 @@ function App() {
     setRequestSyncTone('neutral')
     setJournalSyncStatus('')
     setJournalSyncTone('neutral')
+    setMemberDirectoryStatus('')
+    setMemberDirectoryTone('neutral')
+    setLastDeckAction('')
     const fallbackTeaching = getFallbackTeaching()
     setHomeContent((currentContent) => ({
       ...currentContent,
@@ -1551,6 +1696,7 @@ function App() {
                 nextDeckCard={nextDeckCard}
                 prayedDeckCount={effectivePrayedDeckItems.length}
                 pastoralReviewCount={effectivePastoralReviewItems.length}
+                lastDeckAction={lastDeckAction}
                 swipeIntent={swipeIntent}
                 swipeCardTransform={swipeCardTransform}
                 onDeckDecision={handleDeckDecision}
@@ -1616,6 +1762,8 @@ function App() {
         </>
       ) : null}
 
+      {currentView === 'bible' ? <BibleView /> : null}
+
       {currentView === 'profile' ? (
         <ProfileView
           authSession={authSession}
@@ -1636,6 +1784,14 @@ function App() {
           teachingTone={teachingTone}
           handleTeachingChange={handleTeachingChange}
           handleSaveTeaching={handleSaveTeaching}
+          canManageMembers={canManageMembers}
+          members={memberDirectoryItems}
+          memberDirectoryBusy={memberDirectoryBusy}
+          memberDirectoryStatus={memberDirectoryStatus}
+          memberDirectoryTone={memberDirectoryTone}
+          handleRefreshMemberDirectory={handleRefreshMemberDirectory}
+          handleUpdateMemberRole={handleUpdateMemberRole}
+          roleOptions={roleOptions}
         />
       ) : null}
 

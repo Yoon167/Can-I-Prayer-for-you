@@ -4,6 +4,7 @@ function SwipeQueuePanel({
   nextDeckCard,
   prayedDeckCount,
   pastoralReviewCount,
+  lastDeckAction,
   swipeIntent,
   swipeCardTransform,
   onDeckDecision,
@@ -100,6 +101,7 @@ function SwipeQueuePanel({
           <div className="swipe-summary">
             <p>{prayedDeckCount} prayed from deck</p>
             <p>{pastoralReviewCount} in pastoral review</p>
+            {lastDeckAction ? <p className="swipe-live-status">Live update: {lastDeckAction}</p> : null}
           </div>
         </div>
       ) : (
