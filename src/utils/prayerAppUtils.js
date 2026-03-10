@@ -58,6 +58,12 @@ export function normalizeFocusItems(items) {
     assignedTo: item.assignedTo ?? 'Open team',
     flaggedAt: item.flaggedAt ?? null,
     prayedAt: item.prayedAt ?? null,
+    ownerUserId: item.ownerUserId ?? null,
+    visibilityScope: item.visibilityScope ?? 'team',
+    followUpStatus: item.followUpStatus ?? 'none',
+    prayedNotice: item.prayedNotice ?? '',
+    prayedNotifiedAt: item.prayedNotifiedAt ?? null,
+    prayedBy: item.prayedBy ?? '',
   }))
 }
 
@@ -75,5 +81,11 @@ export function normalizePrayerDeck(items) {
     assignedTo: item.assignedTo ?? 'Open team',
     flaggedAt: item.flaggedAt ?? null,
     prayedAt: item.prayedAt ?? null,
+    ownerUserId: item.ownerUserId ?? null,
+    visibilityScope: item.visibilityScope ?? 'team',
+    followUpStatus: item.followUpStatus ?? 'none',
+    prayedNotice: item.prayedNotice ?? '',
+    prayedNotifiedAt: item.prayedNotifiedAt ?? null,
+    prayedBy: item.prayedBy ?? '',
   }))
 }

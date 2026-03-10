@@ -5,7 +5,10 @@ function PrayerListPanel({
   setRequestText,
   requestIsAnonymous,
   setRequestIsAnonymous,
+  requestVisibilityScope,
+  setRequestVisibilityScope,
   memberDisplayName,
+  authUserId,
   handleAddPrayerRequest,
   filterOptions,
   focusFilter,
@@ -13,6 +16,7 @@ function PrayerListPanel({
   filteredFocusItems,
   handleToggleFocusItem,
   handleMarkAnswered,
+  handleToggleFollowUp,
   handleRemoveFocusItem,
   requestSyncStatus,
   requestSyncTone,
@@ -61,10 +65,21 @@ function PrayerListPanel({
           This request will show as{' '}
           <strong>{requestIsAnonymous ? 'Anonymous member' : memberDisplayName}</strong>
         </p>
+        <label>
+          <span className="auth-label">Request visibility</span>
+          <select
+            className="auth-input"
+            value={requestVisibilityScope}
+            onChange={(event) => setRequestVisibilityScope(event.target.value)}
+          >
+            <option value="team">Intercessory team</option>
+            <option value="pastoral">Pastor and prayer core only</option>
+          </select>
+        </label>
       </div>
 
       <p className="form-helper">
-        New requests added here can be covered in prayer by the team. Intercessor and pastoral workflow actions are reserved for assigned prayer leaders.
+        Team requests move into the live intercessory swipe deck. Sensitive requests go straight to pastoral review and stay limited to the requester, pastors, and prayer core.
       </p>
 
       {requestSyncStatus ? (
@@ -116,9 +131,27 @@ function PrayerListPanel({
               <p className="focus-requester">
                 Requested by <strong>{item.isAnonymous ? 'Anonymous member' : item.requestedBy}</strong>
               </p>
+              <div className="request-status-row">
+                <span className="request-status-chip">
+                  {item.workflowStatus === 'queue' ? 'Pending' : item.workflowStatus}
+                </span>
+                <span className="request-status-chip">
+                  {item.visibilityScope === 'pastoral' ? 'Pastoral only' : 'Intercessory team'}
+                </span>
+                {item.followUpStatus === 'requested' ? (
+                  <span className="request-status-chip request-status-chip-accent">Follow-up</span>
+                ) : null}
+              </div>
+              {item.prayedNotice ? <p className="request-owner-status">{item.prayedNotice}</p> : null}
+              {item.prayedAt ? (
+                <p className="request-owner-status">
+                  Prayed {item.prayedAt}
+                  {item.prayedBy ? ` by ${item.prayedBy}` : ''}.
+                </p>
+              ) : null}
             </div>
             <div className="focus-actions">
-              {canManagePrayerWorkflow ? (
+              {canManagePrayerWorkflow || item.ownerUserId === authUserId ? (
                 <button
                   type="button"
                   className="ghost-action answer-action"
@@ -126,6 +159,16 @@ function PrayerListPanel({
                   aria-label={`Mark ${item.label} as answered`}
                 >
                   Answered
+                </button>
+              ) : null}
+              {canManagePrayerWorkflow ? (
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() => handleToggleFollowUp(item.id)}
+                  aria-label={`Toggle follow-up for ${item.label}`}
+                >
+                  {item.followUpStatus === 'requested' ? 'Clear follow-up' : 'Follow-up'}
                 </button>
               ) : null}
               {canRemoveRequests ? (

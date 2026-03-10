@@ -690,6 +690,34 @@
   margin: -0.1rem 0 1rem;
 }
 
+.request-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.request-status-chip {
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(148, 98, 61, 0.08);
+  color: var(--color-accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.request-status-chip-accent {
+  background: rgba(107, 140, 91, 0.14);
+  color: #4d6c49;
+}
+
+.request-owner-status {
+  margin: 0;
+  color: #45604b;
+  font-size: 0.92rem;
+}
+
 .anonymous-toggle {
   display: inline-flex;
   align-items: center;
@@ -886,6 +914,10 @@
 
 .swipe-badge.active {
   color: #fff9f1;
+}
+
+.swipe-badge-pending.active {
+  background: linear-gradient(135deg, #a27d48, #7f6743);
 }
 
 .swipe-badge-review.active {

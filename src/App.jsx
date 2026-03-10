@@ -179,6 +179,7 @@ function App() {
   const [focusFilter, setFocusFilter] = useState('all')
   const [requestText, setRequestText] = useState('')
   const [requestIsAnonymous, setRequestIsAnonymous] = useState(false)
+  const [requestVisibilityScope, setRequestVisibilityScope] = useState('team')
   const [journalForm, setJournalForm] = useState({ title: '', detail: '' })
   const [memberProfileForm, setMemberProfileForm] = useState(() => ({
     ...memberProfile,
@@ -211,6 +212,7 @@ function App() {
   const [memberDirectoryBusy, setMemberDirectoryBusy] = useState(false)
   const [lastDeckAction, setLastDeckAction] = useState('')
   const [swipeOffset, setSwipeOffset] = useState(0)
+  const [deferredQueueIds, setDeferredQueueIds] = useState([])
   const requestInputRef = useRef(null)
   const journalTitleRef = useRef(null)
   const swipeStartXRef = useRef(null)
@@ -329,9 +331,37 @@ function App() {
         assignedTo: focusItem.assignedTo,
         flaggedAt: focusItem.flaggedAt,
         prayedAt: focusItem.prayedAt,
+        ownerUserId: focusItem.ownerUserId,
+        visibilityScope: focusItem.visibilityScope,
+        followUpStatus: focusItem.followUpStatus,
+        prayedNotice: focusItem.prayedNotice,
+        prayedNotifiedAt: focusItem.prayedNotifiedAt,
+        prayedBy: focusItem.prayedBy,
       },
       ...currentItems,
     ])
+  }
+
+  function clearDeferredQueueId(itemId) {
+    setDeferredQueueIds((currentIds) => currentIds.filter((entryId) => entryId !== itemId))
+  }
+
+  function deferQueueId(itemId) {
+    setDeferredQueueIds((currentIds) => [...currentIds.filter((entryId) => entryId !== itemId), itemId])
+  }
+
+  function buildPrayedUpdate(item) {
+    const prayedAt = formatAnsweredDate()
+
+    return {
+      ...item,
+      workflowStatus: 'prayed',
+      flaggedAt: item.flaggedAt,
+      prayedAt,
+      prayedBy: memberDisplayName,
+      prayedNotice: `${memberDisplayName} and the intercessory team prayed for this request.`,
+      prayedNotifiedAt: prayedAt,
+    }
   }
 
   useEffect(() => {
@@ -634,6 +664,43 @@ function App() {
   }, [sharedJournalEnabled])
 
   const activeRole = authSession?.role ?? selectedRole
+  const visibleFocusItems = focusItems.filter((item) => {
+    if (item.visibilityScope !== 'pastoral') {
+      return true
+    }
+
+    return (
+      activeRole === 'pastor' ||
+      activeRole === 'prayer-core' ||
+      item.ownerUserId === authSession?.userId
+    )
+  })
+
+  const deferredQueueIndex = new Map(
+    deferredQueueIds.map((itemId, index) => [itemId, index]),
+  )
+
+  function sortDeferredQueueItems(items) {
+    return [...items].sort((leftItem, rightItem) => {
+      const leftIndex = deferredQueueIndex.has(leftItem.id) ? deferredQueueIndex.get(leftItem.id) : -1
+      const rightIndex = deferredQueueIndex.has(rightItem.id) ? deferredQueueIndex.get(rightItem.id) : -1
+
+      if (leftIndex === -1 && rightIndex === -1) {
+        return 0
+      }
+
+      if (leftIndex === -1) {
+        return -1
+      }
+
+      if (rightIndex === -1) {
+        return 1
+      }
+
+      return leftIndex - rightIndex
+    })
+  }
+
   const effectiveRequestSyncStatus =
     requestSyncStatus ||
     (sharedPrayerRequestsEnabled
@@ -648,23 +715,31 @@ function App() {
   const effectiveJournalSyncTone = sharedJournalEnabled ? journalSyncTone : 'neutral'
   const { devotion: dailyDevotion, teaching: dailyTeaching } = homeContent
 
-  const sharedPrayerQueue = focusItems
-    .filter((item) => !item.answeredAt && item.workflowStatus === 'queue')
-    .map((item) => ({
-      id: item.id,
-      focusItemId: item.id,
-      name: item.isAnonymous ? 'Anonymous member' : item.requestedBy,
-      requestedBy: item.requestedBy,
-      isAnonymous: item.isAnonymous,
-      request: item.label,
-      category: item.category,
-      confidentiality: item.confidentiality,
-      submittedBy: item.submittedBy,
-      assignedTo: item.assignedTo,
-      flaggedAt: item.flaggedAt,
-      prayedAt: item.prayedAt,
-    }))
-  const sharedPastoralReviewItems = focusItems
+  const sharedPrayerQueue = sortDeferredQueueItems(
+    visibleFocusItems
+      .filter((item) => !item.answeredAt && item.workflowStatus === 'queue')
+      .map((item) => ({
+        id: item.id,
+        focusItemId: item.id,
+        name: item.isAnonymous ? 'Anonymous member' : item.requestedBy,
+        requestedBy: item.requestedBy,
+        isAnonymous: item.isAnonymous,
+        request: item.label,
+        category: item.category,
+        confidentiality: item.confidentiality,
+        submittedBy: item.submittedBy,
+        assignedTo: item.assignedTo,
+        flaggedAt: item.flaggedAt,
+        prayedAt: item.prayedAt,
+        ownerUserId: item.ownerUserId,
+        visibilityScope: item.visibilityScope,
+        followUpStatus: item.followUpStatus,
+        prayedNotice: item.prayedNotice,
+        prayedNotifiedAt: item.prayedNotifiedAt,
+        prayedBy: item.prayedBy,
+      })),
+  )
+  const sharedPastoralReviewItems = visibleFocusItems
     .filter((item) => !item.answeredAt && item.workflowStatus === 'review')
     .map((item) => ({
       id: item.id,
@@ -679,8 +754,14 @@ function App() {
       assignedTo: item.assignedTo,
       flaggedAt: item.flaggedAt,
       prayedAt: item.prayedAt,
+      ownerUserId: item.ownerUserId,
+      visibilityScope: item.visibilityScope,
+      followUpStatus: item.followUpStatus,
+      prayedNotice: item.prayedNotice,
+      prayedNotifiedAt: item.prayedNotifiedAt,
+      prayedBy: item.prayedBy,
     }))
-  const sharedPrayedDeckItems = focusItems
+  const sharedPrayedDeckItems = visibleFocusItems
     .filter((item) => item.workflowStatus === 'prayed')
     .map((item) => ({
       id: item.id,
@@ -695,6 +776,12 @@ function App() {
       assignedTo: item.assignedTo,
       flaggedAt: item.flaggedAt,
       prayedAt: item.prayedAt,
+      ownerUserId: item.ownerUserId,
+      visibilityScope: item.visibilityScope,
+      followUpStatus: item.followUpStatus,
+      prayedNotice: item.prayedNotice,
+      prayedNotifiedAt: item.prayedNotifiedAt,
+      prayedBy: item.prayedBy,
     }))
 
   const effectivePrayerQueue = sharedPrayerRequestsEnabled ? sharedPrayerQueue : prayerQueue
@@ -703,8 +790,8 @@ function App() {
     : pastoralReviewItems
   const effectivePrayedDeckItems = sharedPrayerRequestsEnabled ? sharedPrayedDeckItems : prayedDeckItems
 
-  const activeFocusItems = focusItems.filter((item) => !item.answeredAt)
-  const answeredFocusItems = focusItems.filter((item) => item.answeredAt)
+  const activeFocusItems = visibleFocusItems.filter((item) => !item.answeredAt)
+  const answeredFocusItems = visibleFocusItems.filter((item) => item.answeredAt)
   const completedFocusItems = activeFocusItems.filter((item) => item.completed).length
   const currentDeckCard = effectivePrayerQueue[0]
   const nextDeckCard = effectivePrayerQueue[1]
@@ -719,7 +806,7 @@ function App() {
 
     return true
   })
-  const swipeIntent = swipeOffset > 40 ? 'prayed' : swipeOffset < -40 ? 'review' : null
+  const swipeIntent = swipeOffset > 40 ? 'prayed' : swipeOffset < -40 ? 'pending' : null
   const swipeCardTransform = currentDeckCard
     ? `translateX(${swipeOffset}px) rotate(${swipeOffset / 18}deg)`
     : undefined
@@ -904,6 +991,7 @@ function App() {
 
     const focusId = createId('focus')
     const requesterName = requestIsAnonymous ? 'Anonymous member' : memberDisplayName
+    const isPastoralOnly = requestVisibilityScope === 'pastoral'
 
     const nextFocusItem = {
       id: focusId,
@@ -913,13 +1001,19 @@ function App() {
       answeredNote: '',
       requestedBy: requesterName,
       isAnonymous: requestIsAnonymous,
-      workflowStatus: 'queue',
-      category: 'Community care',
-      confidentiality: 'Intercessor safe',
+      workflowStatus: isPastoralOnly ? 'review' : 'queue',
+      category: isPastoralOnly ? 'Sensitive care' : 'Community care',
+      confidentiality: isPastoralOnly ? 'Pastoral sensitive' : 'Intercessor safe',
       submittedBy: requestIsAnonymous ? 'Anonymous prayer request' : 'Member prayer request',
-      assignedTo: 'Open team',
-      flaggedAt: null,
+      assignedTo: isPastoralOnly ? 'Pastor and prayer core' : 'Intercessory team',
+      flaggedAt: isPastoralOnly ? formatAnsweredDate() : null,
       prayedAt: null,
+      ownerUserId: authSession?.userId ?? null,
+      visibilityScope: requestVisibilityScope,
+      followUpStatus: 'none',
+      prayedNotice: '',
+      prayedNotifiedAt: null,
+      prayedBy: '',
     }
 
     if (sharedPrayerRequestsEnabled) {
@@ -928,13 +1022,16 @@ function App() {
       if (error) {
         if (isTransientSupabaseError(error)) {
           setFocusItems((currentItems) => [nextFocusItem, ...currentItems])
-          addPrayerRequestToLocalDeck(nextFocusItem, requesterName)
+          if (!isPastoralOnly) {
+            addPrayerRequestToLocalDeck(nextFocusItem, requesterName)
+          }
           setRequestSyncStatus(
             'Supabase is unreachable right now, so this prayer request was saved only on this device.',
           )
           setRequestSyncTone('neutral')
           setRequestText('')
           setRequestIsAnonymous(false)
+          setRequestVisibilityScope('team')
           requestInputRef.current?.focus()
           return
         }
@@ -952,10 +1049,13 @@ function App() {
     }
 
     if (!sharedPrayerRequestsEnabled) {
-      addPrayerRequestToLocalDeck(nextFocusItem, requesterName)
+      if (!isPastoralOnly) {
+        addPrayerRequestToLocalDeck(nextFocusItem, requesterName)
+      }
     }
     setRequestText('')
     setRequestIsAnonymous(false)
+    setRequestVisibilityScope('team')
     requestInputRef.current?.focus()
   }
 
@@ -1366,6 +1466,49 @@ function App() {
     })
   }
 
+  async function handleToggleFollowUp(itemId) {
+    const selectedItem = focusItems.find((item) => item.id === itemId)
+
+    if (!selectedItem) {
+      return
+    }
+
+    const nextItem = {
+      ...selectedItem,
+      followUpStatus: selectedItem.followUpStatus === 'requested' ? 'none' : 'requested',
+    }
+
+    if (sharedPrayerRequestsEnabled) {
+      const { item, error } = await updatePrayerRequest(itemId, nextItem)
+
+      if (error) {
+        if (isTransientSupabaseError(error)) {
+          setFocusItems((currentItems) =>
+            currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
+          )
+          setRequestSyncStatus('Supabase is unreachable right now, so the follow-up flag was saved only on this device.')
+          setRequestSyncTone('neutral')
+          return
+        }
+
+        setRequestSyncStatus(`Unable to update follow-up for this request: ${error}`)
+        setRequestSyncTone('error')
+        return
+      }
+
+      setFocusItems((currentItems) =>
+        currentItems.map((entry) => (entry.id === itemId ? item : entry)),
+      )
+      setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
+      setRequestSyncTone('neutral')
+      return
+    }
+
+    setFocusItems((currentItems) =>
+      currentItems.map((entry) => (entry.id === itemId ? nextItem : entry)),
+    )
+  }
+
   function handleJournalChange(event) {
     const { name, value } = event.target
 
@@ -1476,6 +1619,20 @@ function App() {
       return
     }
 
+    if (decision === 'pending') {
+      if (sharedPrayerRequestsEnabled) {
+        deferQueueId(currentDeckCard.focusItemId)
+      } else {
+        setPrayerQueue((currentItems) =>
+          currentItems.length > 1 ? [...currentItems.slice(1), currentItems[0]] : currentItems,
+        )
+      }
+
+      setLastDeckAction('Request kept pending for another prayer pass.')
+      resetSwipeGesture()
+      return
+    }
+
     if (sharedPrayerRequestsEnabled) {
       const selectedItem = focusItems.find((item) => item.id === currentDeckCard.focusItemId)
 
@@ -1483,24 +1640,16 @@ function App() {
         return
       }
 
-      const nextItem = {
-        ...selectedItem,
-        workflowStatus: decision === 'review' ? 'review' : 'prayed',
-        flaggedAt: decision === 'review' ? formatAnsweredDate() : null,
-        prayedAt: decision === 'prayed' ? formatAnsweredDate() : null,
-      }
+      const nextItem = buildPrayedUpdate(selectedItem)
 
       await updateSharedWorkflowItem(
         selectedItem.id,
         nextItem,
-        decision === 'review'
-          ? 'Unable to send this request to pastoral review'
-          : 'Unable to mark this request as prayed',
+        'Unable to mark this request as prayed',
       )
+      clearDeferredQueueId(selectedItem.id)
       setLastDeckAction(
-        decision === 'review'
-          ? 'Request moved into pastoral review.'
-          : 'Request marked as prayed in the live queue.',
+        'Request marked as prayed and the requester can now see that prayer coverage happened.',
       )
       resetSwipeGesture()
       return
@@ -1508,21 +1657,57 @@ function App() {
 
     setPrayerQueue((currentItems) => currentItems.slice(1))
 
-    if (decision === 'review') {
-      setPastoralReviewItems((currentItems) => [
-        { ...currentDeckCard, flaggedAt: formatAnsweredDate() },
-        ...currentItems,
-      ])
-      setLastDeckAction('Request moved into pastoral review.')
+    setPrayedDeckItems((currentItems) => [
+      { ...currentDeckCard, ...buildPrayedUpdate(currentDeckCard) },
+      ...currentItems,
+    ])
+    setLastDeckAction('Request marked as prayed and the requester can now see that prayer coverage happened.')
+    resetSwipeGesture()
+  }
+
+  async function handleSendCurrentDeckToReview() {
+    if (!currentDeckCard) {
+      return
+    }
+
+    if (sharedPrayerRequestsEnabled) {
+      const selectedItem = focusItems.find((item) => item.id === currentDeckCard.focusItemId)
+
+      if (!selectedItem) {
+        return
+      }
+
+      await updateSharedWorkflowItem(
+        selectedItem.id,
+        {
+          ...selectedItem,
+          workflowStatus: 'review',
+          visibilityScope: 'pastoral',
+          confidentiality: 'Pastoral sensitive',
+          assignedTo: 'Pastor and prayer core',
+          flaggedAt: formatAnsweredDate(),
+          prayedAt: null,
+        },
+        'Unable to send this request to pastoral review',
+      )
+      clearDeferredQueueId(selectedItem.id)
+      setLastDeckAction('Request moved into pastoral review and is now limited to pastor and prayer core.')
       resetSwipeGesture()
       return
     }
 
-    setPrayedDeckItems((currentItems) => [
-      { ...currentDeckCard, prayedAt: formatAnsweredDate() },
+    setPrayerQueue((currentItems) => currentItems.slice(1))
+    setPastoralReviewItems((currentItems) => [
+      {
+        ...currentDeckCard,
+        visibilityScope: 'pastoral',
+        confidentiality: 'Pastoral sensitive',
+        assignedTo: 'Pastor and prayer core',
+        flaggedAt: formatAnsweredDate(),
+      },
       ...currentItems,
     ])
-    setLastDeckAction('Request marked as prayed in the live queue.')
+    setLastDeckAction('Request moved into pastoral review and is now limited to pastor and prayer core.')
     resetSwipeGesture()
   }
 
@@ -1559,7 +1744,7 @@ function App() {
     }
 
     if (dragDistance < -120) {
-      handleDeckDecision('review')
+      handleDeckDecision('pending')
       return
     }
 
@@ -1586,11 +1771,9 @@ function App() {
       }
 
       await updateSharedWorkflowItem(itemId, {
-        ...selectedFocusItem,
-        workflowStatus: 'prayed',
-        flaggedAt: selectedFocusItem.flaggedAt,
-        prayedAt: formatAnsweredDate(),
+        ...buildPrayedUpdate(selectedFocusItem),
       }, 'Unable to approve this prayer request')
+      clearDeferredQueueId(itemId)
       setLastDeckAction('Pastoral review approved and moved to prayed.')
       return
     }
@@ -1620,9 +1803,13 @@ function App() {
       await updateSharedWorkflowItem(itemId, {
         ...selectedFocusItem,
         workflowStatus: 'queue',
+        visibilityScope: 'team',
+        confidentiality: 'Intercessor safe',
+        assignedTo: 'Intercessory team',
         flaggedAt: null,
         prayedAt: null,
       }, 'Unable to return this request to the queue')
+      clearDeferredQueueId(itemId)
       setLastDeckAction('Pastoral review request returned to the live queue.')
       return
     }
@@ -1731,6 +1918,8 @@ function App() {
     setMemberDirectoryStatus('')
     setMemberDirectoryTone('neutral')
     setLastDeckAction('')
+    setDeferredQueueIds([])
+    setRequestVisibilityScope('team')
     const fallbackTeaching = getFallbackTeaching()
     setHomeContent((currentContent) => ({
       ...currentContent,
@@ -1853,6 +2042,7 @@ function App() {
                 swipeIntent={swipeIntent}
                 swipeCardTransform={swipeCardTransform}
                 onDeckDecision={handleDeckDecision}
+                onSendToReview={handleSendCurrentDeckToReview}
                 onPointerDown={handleDeckPointerDown}
                 onPointerMove={handleDeckPointerMove}
                 onPointerUp={handleDeckPointerUp}
@@ -1881,7 +2071,10 @@ function App() {
               setRequestText={setRequestText}
               requestIsAnonymous={requestIsAnonymous}
               setRequestIsAnonymous={setRequestIsAnonymous}
+              requestVisibilityScope={requestVisibilityScope}
+              setRequestVisibilityScope={setRequestVisibilityScope}
               memberDisplayName={memberDisplayName}
+              authUserId={authSession.userId}
               handleAddPrayerRequest={handleAddPrayerRequest}
               filterOptions={filterOptions}
               focusFilter={focusFilter}
@@ -1889,6 +2082,7 @@ function App() {
               filteredFocusItems={filteredFocusItems}
               handleToggleFocusItem={handleToggleFocusItem}
               handleMarkAnswered={handleMarkAnswered}
+              handleToggleFollowUp={handleToggleFollowUp}
               handleRemoveFocusItem={handleRemoveFocusItem}
               requestSyncStatus={effectiveRequestSyncStatus}
               requestSyncTone={effectiveRequestSyncTone}

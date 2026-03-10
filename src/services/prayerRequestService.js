@@ -2,6 +2,21 @@ import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
 import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
 
 const prayerRequestsTable = 'prayer_requests'
+const prayerRequestSelectColumns = 'id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, owner_user_id, visibility_scope, follow_up_status, prayed_notice, prayed_notified_at, prayed_by, created_at'
+const legacyPrayerRequestSelectColumns = 'id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at'
+
+function isLegacyPrayerRequestSchemaError(error) {
+  const message = error?.message?.toLowerCase?.() ?? ''
+
+  return (
+    message.includes('owner_user_id') ||
+    message.includes('visibility_scope') ||
+    message.includes('follow_up_status') ||
+    message.includes('prayed_notice') ||
+    message.includes('prayed_notified_at') ||
+    message.includes('prayed_by')
+  )
+}
 
 function normalizePrayerRequestRow(row) {
   return {
@@ -19,11 +34,19 @@ function normalizePrayerRequestRow(row) {
     assignedTo: row.assigned_to ?? 'Open team',
     flaggedAt: row.flagged_at ?? null,
     prayedAt: row.prayed_at ?? null,
+    ownerUserId: row.owner_user_id ?? null,
+    visibilityScope:
+      row.visibility_scope ??
+      ((row.confidentiality ?? '').toLowerCase().includes('pastoral') ? 'pastoral' : 'team'),
+    followUpStatus: row.follow_up_status ?? 'none',
+    prayedNotice: row.prayed_notice ?? '',
+    prayedNotifiedAt: row.prayed_notified_at ?? null,
+    prayedBy: row.prayed_by ?? '',
   }
 }
 
-function buildPrayerRequestPayload(item) {
-  return {
+function buildPrayerRequestPayload(item, includeAdvancedFields = true) {
+  const payload = {
     id: item.id,
     label: item.label,
     completed: item.completed,
@@ -39,6 +62,17 @@ function buildPrayerRequestPayload(item) {
     flagged_at: item.flaggedAt,
     prayed_at: item.prayedAt,
   }
+
+  if (includeAdvancedFields) {
+    payload.owner_user_id = item.ownerUserId ?? null
+    payload.visibility_scope = item.visibilityScope ?? 'team'
+    payload.follow_up_status = item.followUpStatus ?? 'none'
+    payload.prayed_notice = item.prayedNotice ?? ''
+    payload.prayed_notified_at = item.prayedNotifiedAt ?? null
+    payload.prayed_by = item.prayedBy ?? ''
+  }
+
+  return payload
 }
 
 export const isPrayerRequestSyncConfigured = isSupabaseConfigured
@@ -49,10 +83,19 @@ export async function listPrayerRequests() {
   }
 
   try {
-    const { data, error } = await supabase
+    let response = await supabase
       .from(prayerRequestsTable)
-      .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
+      .select(prayerRequestSelectColumns)
       .order('created_at', { ascending: false })
+
+    if (response.error && isLegacyPrayerRequestSchemaError(response.error)) {
+      response = await supabase
+        .from(prayerRequestsTable)
+        .select(legacyPrayerRequestSelectColumns)
+        .order('created_at', { ascending: false })
+    }
+
+    const { data, error } = response
 
     if (error) {
       return { items: [], error: normalizeSupabaseSyncError(error, 'prayer requests') }
@@ -73,11 +116,21 @@ export async function createPrayerRequest(item) {
   }
 
   try {
-    const { data, error } = await supabase
+    let response = await supabase
       .from(prayerRequestsTable)
       .insert(buildPrayerRequestPayload(item))
-      .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
+      .select(prayerRequestSelectColumns)
       .single()
+
+    if (response.error && isLegacyPrayerRequestSchemaError(response.error)) {
+      response = await supabase
+        .from(prayerRequestsTable)
+        .insert(buildPrayerRequestPayload(item, false))
+        .select(legacyPrayerRequestSelectColumns)
+        .single()
+    }
+
+    const { data, error } = response
 
     if (error) {
       return { item: null, error: normalizeSupabaseSyncError(error, 'prayer requests') }
@@ -112,17 +165,37 @@ export async function updatePrayerRequest(itemId, updates) {
     assignedTo: updates.assignedTo ?? 'Open team',
     flaggedAt: updates.flaggedAt ?? null,
     prayedAt: updates.prayedAt ?? null,
+    ownerUserId: updates.ownerUserId ?? null,
+    visibilityScope: updates.visibilityScope ?? 'team',
+    followUpStatus: updates.followUpStatus ?? 'none',
+    prayedNotice: updates.prayedNotice ?? '',
+    prayedNotifiedAt: updates.prayedNotifiedAt ?? null,
+    prayedBy: updates.prayedBy ?? '',
   })
 
   delete payload.id
 
   try {
-    const { data, error } = await supabase
+    let response = await supabase
       .from(prayerRequestsTable)
       .update(payload)
       .eq('id', itemId)
-      .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
+      .select(prayerRequestSelectColumns)
       .single()
+
+    if (response.error && isLegacyPrayerRequestSchemaError(response.error)) {
+      const legacyPayload = buildPrayerRequestPayload({ id: itemId, ...updates }, false)
+      delete legacyPayload.id
+
+      response = await supabase
+        .from(prayerRequestsTable)
+        .update(legacyPayload)
+        .eq('id', itemId)
+        .select(legacyPrayerRequestSelectColumns)
+        .single()
+    }
+
+    const { data, error } = response
 
     if (error) {
       return { item: null, error: normalizeSupabaseSyncError(error, 'prayer requests') }
