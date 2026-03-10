@@ -305,7 +305,7 @@ function App() {
         }
 
         console.error('Unable to restore Supabase session', error)
-        setAuthError('Supabase sign-in is unavailable right now. Please sign in again.')
+        setAuthError('Unable to restore your Supabase session. Please sign in again.')
       } finally {
         if (isMounted) {
           setAuthReady(true)
