@@ -1,0 +1,104 @@
+import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
+
+const journalEntriesTable = 'journal_entries'
+
+function normalizeJournalEntryRow(row) {
+  return {
+    id: row.id,
+    title: row.title ?? '',
+    detail: row.detail ?? '',
+    date: row.entry_date ?? '',
+  }
+}
+
+function buildJournalEntryPayload(entry) {
+  return {
+    id: entry.id,
+    title: entry.title,
+    detail: entry.detail,
+    entry_date: entry.date,
+  }
+}
+
+export const isJournalSyncConfigured = isSupabaseConfigured
+
+export async function listJournalEntries() {
+  if (!supabase || !isJournalSyncConfigured) {
+    return { items: [], error: null }
+  }
+
+  const { data, error } = await supabase
+    .from(journalEntriesTable)
+    .select('id, title, detail, entry_date, created_at')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    return { items: [], error: error.message }
+  }
+
+  return {
+    items: data.map(normalizeJournalEntryRow),
+    error: null,
+  }
+}
+
+export async function createJournalEntry(entry) {
+  if (!supabase || !isJournalSyncConfigured) {
+    return { item: entry, error: null }
+  }
+
+  const { data, error } = await supabase
+    .from(journalEntriesTable)
+    .insert(buildJournalEntryPayload(entry))
+    .select('id, title, detail, entry_date, created_at')
+    .single()
+
+  if (error) {
+    return { item: null, error: error.message }
+  }
+
+  return {
+    item: normalizeJournalEntryRow(data),
+    error: null,
+  }
+}
+
+export async function deleteJournalEntry(entryId) {
+  if (!supabase || !isJournalSyncConfigured) {
+    return { error: null }
+  }
+
+  const { error } = await supabase.from(journalEntriesTable).delete().eq('id', entryId)
+
+  return {
+    error: error ? error.message : null,
+  }
+}
+
+export function subscribeToJournalEntries(onItemsChange, onError) {
+  if (!supabase || !isJournalSyncConfigured) {
+    return () => {}
+  }
+
+  const channel = supabase
+    .channel('journal-entries-sync')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: journalEntriesTable },
+      async () => {
+        const { items, error } = await listJournalEntries()
+
+        if (error) {
+          onError?.(error)
+          return
+        }
+
+        onItemsChange(items)
+      },
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
+}
