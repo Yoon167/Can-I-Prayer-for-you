@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
-import { normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
+import { isTransientSupabaseError, normalizeSupabaseSyncError } from './supabaseSyncUtils.js'
 
 const prayerRequestsTable = 'prayer_requests'
 const prayerRequestSelectColumns = 'id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, owner_user_id, visibility_scope, follow_up_status, follow_up_messages, prayed_notice, prayed_notified_at, prayed_by, testimony_text, testimony_shared, created_at'
@@ -104,23 +104,58 @@ function buildPrayerRequestPayload(item, includeAdvancedFields = true) {
 
 export const isPrayerRequestSyncConfigured = isSupabaseConfigured
 
+async function refreshPrayerRequestSession() {
+  if (!supabase) {
+    return
+  }
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (session) {
+      await supabase.auth.refreshSession()
+    }
+  } catch {
+    // Ignore refresh failures and allow the original error handling to run.
+  }
+}
+
+async function runPrayerRequestOperation(operation) {
+  let response = await operation()
+
+  if (!response?.error || !isTransientSupabaseError(response.error)) {
+    return response
+  }
+
+  await refreshPrayerRequestSession()
+  response = await operation()
+
+  return response
+}
+
 export async function listPrayerRequests() {
   if (!supabase || !isPrayerRequestSyncConfigured) {
     return { items: [], error: null }
   }
 
   try {
-    let response = await supabase
-      .from(prayerRequestsTable)
-      .select(prayerRequestSelectColumns)
-      .order('created_at', { ascending: false })
-
-    if (response.error && isLegacyPrayerRequestSchemaError(response.error)) {
-      response = await supabase
+    const response = await runPrayerRequestOperation(async () => {
+      let nextResponse = await supabase
         .from(prayerRequestsTable)
-        .select(legacyPrayerRequestSelectColumns)
+        .select(prayerRequestSelectColumns)
         .order('created_at', { ascending: false })
-    }
+
+      if (nextResponse.error && isLegacyPrayerRequestSchemaError(nextResponse.error)) {
+        nextResponse = await supabase
+          .from(prayerRequestsTable)
+          .select(legacyPrayerRequestSelectColumns)
+          .order('created_at', { ascending: false })
+      }
+
+      return nextResponse
+    })
 
     const { data, error } = response
 
@@ -143,19 +178,23 @@ export async function createPrayerRequest(item) {
   }
 
   try {
-    let response = await supabase
-      .from(prayerRequestsTable)
-      .insert(buildPrayerRequestPayload(item))
-      .select(prayerRequestSelectColumns)
-      .single()
-
-    if (response.error && isLegacyPrayerRequestSchemaError(response.error)) {
-      response = await supabase
+    const response = await runPrayerRequestOperation(async () => {
+      let nextResponse = await supabase
         .from(prayerRequestsTable)
-        .insert(buildPrayerRequestPayload(item, false))
-        .select(legacyPrayerRequestSelectColumns)
+        .insert(buildPrayerRequestPayload(item))
+        .select(prayerRequestSelectColumns)
         .single()
-    }
+
+      if (nextResponse.error && isLegacyPrayerRequestSchemaError(nextResponse.error)) {
+        nextResponse = await supabase
+          .from(prayerRequestsTable)
+          .insert(buildPrayerRequestPayload(item, false))
+          .select(legacyPrayerRequestSelectColumns)
+          .single()
+      }
+
+      return nextResponse
+    })
 
     const { data, error } = response
 
@@ -206,24 +245,28 @@ export async function updatePrayerRequest(itemId, updates) {
   delete payload.id
 
   try {
-    let response = await supabase
-      .from(prayerRequestsTable)
-      .update(payload)
-      .eq('id', itemId)
-      .select(prayerRequestSelectColumns)
-      .single()
-
-    if (response.error && isLegacyPrayerRequestSchemaError(response.error)) {
-      const legacyPayload = buildPrayerRequestPayload({ id: itemId, ...updates }, false)
-      delete legacyPayload.id
-
-      response = await supabase
+    const response = await runPrayerRequestOperation(async () => {
+      let nextResponse = await supabase
         .from(prayerRequestsTable)
-        .update(legacyPayload)
+        .update(payload)
         .eq('id', itemId)
-        .select(legacyPrayerRequestSelectColumns)
+        .select(prayerRequestSelectColumns)
         .single()
-    }
+
+      if (nextResponse.error && isLegacyPrayerRequestSchemaError(nextResponse.error)) {
+        const legacyPayload = buildPrayerRequestPayload({ id: itemId, ...updates }, false)
+        delete legacyPayload.id
+
+        nextResponse = await supabase
+          .from(prayerRequestsTable)
+          .update(legacyPayload)
+          .eq('id', itemId)
+          .select(legacyPrayerRequestSelectColumns)
+          .single()
+      }
+
+      return nextResponse
+    })
 
     const { data, error } = response
 
@@ -246,7 +289,9 @@ export async function deletePrayerRequest(itemId) {
   }
 
   try {
-    const { error } = await supabase.from(prayerRequestsTable).delete().eq('id', itemId)
+    const { error } = await runPrayerRequestOperation(async () =>
+      supabase.from(prayerRequestsTable).delete().eq('id', itemId),
+    )
 
     return {
       error: error ? normalizeSupabaseSyncError(error, 'prayer requests') : null,
