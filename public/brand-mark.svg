@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">Can I Pray for You icon</title>
+  <desc id="desc">A warm prayer app icon with folded hands and a sunrise glow.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#30473b" />
+      <stop offset="100%" stop-color="#94623d" />
+    </linearGradient>
+    <linearGradient id="hands" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fff9f1" />
+      <stop offset="100%" stop-color="#f0d5b4" />
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="32" fill="url(#bg)" />
+  <circle cx="64" cy="34" r="15" fill="#f7d28c" opacity="0.92" />
+  <path d="M64 18v10M54 24l4 7M74 24l-4 7" stroke="#fff8ef" stroke-width="4" stroke-linecap="round" />
+  <path d="M45 88c0-18 8-34 19-46 11 12 19 28 19 46 0 8-6 15-14 15H59c-8 0-14-7-14-15Z" fill="url(#hands)" />
+  <path d="M64 42v61" stroke="#c78f63" stroke-width="4" stroke-linecap="round" />
+  <path d="M52 54c4 5 8 13 12 23 4-10 8-18 12-23" fill="none" stroke="#c78f63" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+</svg>

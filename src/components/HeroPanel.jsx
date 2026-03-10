@@ -3,10 +3,10 @@ function HeroPanel({ answeredCount, completedCount, activeCount, requestInputRef
     <section className="hero-panel">
       <div className="hero-copy">
         <p className="eyebrow">Daily prayer home</p>
-        <h1>Keep your prayer life visible, structured, and active.</h1>
+        <h1>Keep your prayer life visible, hopeful, and active.</h1>
         <p className="hero-text">
-          Build a rhythm for gratitude, reflection, and focused intercession with one clear place
-          to return to each day.
+          Bring requests, gratitude, and daily reflection into one prayer space that is simple to
+          return to every day.
         </p>
 
         <div className="hero-actions">
@@ -29,10 +29,10 @@ function HeroPanel({ answeredCount, completedCount, activeCount, requestInputRef
 
       <aside className="hero-card">
         <p className="card-label">Today&apos;s focus</p>
-        <h2>Be still and stay intentional.</h2>
+        <h2>Be still, stay faithful, and keep praying.</h2>
         <p>
-          Set aside 15 minutes for silence, one passage of scripture, and three specific prayer
-          points.
+          Make space for scripture, quiet reflection, and a few names or needs you want to carry
+          before God today.
         </p>
 
         <div className="hero-metrics">

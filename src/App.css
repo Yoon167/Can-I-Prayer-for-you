@@ -28,8 +28,12 @@
 .app-navbar-brand h2 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 1.45rem;
   color: var(--color-ink);
+}
+
+.app-navbar-brand .eyebrow {
+  margin-bottom: 0.35rem;
 }
 
 .app-navbar-links {
@@ -117,6 +121,10 @@
   max-width: 56ch;
   margin: 1rem 0 0;
   color: var(--color-muted);
+}
+
+.session-meta {
+  overflow-wrap: anywhere;
 }
 
 .auth-form,
@@ -1111,6 +1119,10 @@
     justify-content: flex-start;
   }
 
+  .session-meta {
+    max-width: 100%;
+  }
+
   .panel-wide {
     grid-column: span 1;
   }
@@ -1121,6 +1133,11 @@
 }
 
 @media (max-width: 640px) {
+  .auth-shell {
+    width: min(100% - 1rem, 100%);
+    padding: 1rem 0 5rem;
+  }
+
   .app-shell {
     width: min(100% - 1rem, 100%);
     padding: 0.75rem 0 7rem;
@@ -1177,6 +1194,25 @@
   .auth-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .auth-mode-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .role-switcher {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .role-switcher .ghost-action {
+    width: 100%;
+  }
+
+  .panel-heading {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .auth-submit {

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Can I Pray for You social preview</title>
+  <desc id="desc">Preview card for the Can I Pray for You global prayer community app.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#2d4338" />
+      <stop offset="100%" stop-color="#9a6640" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0.2" cy="0.1" r="0.9">
+      <stop offset="0%" stop-color="#fff4d4" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#fff4d4" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)" rx="36" />
+  <rect width="1200" height="630" fill="url(#glow)" rx="36" />
+  <g opacity="0.14" fill="#fff8ef">
+    <circle cx="1090" cy="120" r="110" />
+    <circle cx="145" cy="560" r="150" />
+  </g>
+  <g transform="translate(92 84)">
+    <rect width="132" height="132" rx="32" fill="#fff8ef" opacity="0.12" />
+    <path d="M66 26v13M53 34l5 8M79 34l-5 8" stroke="#fff8ef" stroke-width="6" stroke-linecap="round" />
+    <circle cx="66" cy="48" r="16" fill="#f5cf89" />
+    <path d="M45 104c0-19 8-35 21-48 13 13 21 29 21 48 0 9-7 16-16 16H61c-9 0-16-7-16-16Z" fill="#fff8ef" />
+    <path d="M66 56v64" stroke="#c88f63" stroke-width="4.5" stroke-linecap="round" />
+    <path d="M53 69c4 6 8 14 13 24 5-10 9-18 13-24" fill="none" stroke="#c88f63" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+  <text x="92" y="294" fill="#fff9f1" font-family="Georgia, serif" font-size="78" font-weight="700">
+    Can I Pray for You
+  </text>
+  <text x="92" y="354" fill="#f0dfcf" font-family="Arial, sans-serif" font-size="26" letter-spacing="5">
+    GLOBAL PRAYER COMMUNITY
+  </text>
+  <text x="92" y="445" fill="#fff7ee" font-family="Arial, sans-serif" font-size="36">
+    Prayer requests, praise reports, journals, and daily encouragement.
+  </text>
+  <text x="92" y="498" fill="#f0dfcf" font-family="Arial, sans-serif" font-size="29">
+    Share hope. Track prayer. Stay faithful.
+  </text>
+  <rect x="92" y="536" width="330" height="12" rx="6" fill="#fff4de" opacity="0.74" />
+</svg>

@@ -74,8 +74,8 @@ function AppNavbar({ currentView, onChangeView }) {
   return (
     <nav className="app-navbar" aria-label="Primary navigation">
       <div className="app-navbar-brand">
-        <p className="eyebrow">Prayer App</p>
-        <h2>Prayer workflow</h2>
+        <p className="eyebrow">Global prayer community</p>
+        <h2>Can I Pray for You</h2>
       </div>
 
       <div className="app-navbar-links">
