@@ -46,6 +46,8 @@ In your GitHub repository:
 2. Add a secret named `VITE_SUPABASE_URL`.
 3. Add a secret named `VITE_SUPABASE_ANON_KEY`.
 
+These must be repository Actions secrets, not environment-only secrets, because the `build` job reads them before the `github-pages` deploy environment is used.
+
 Get both values from `Project Settings` > `API` in Supabase.
 
 The GitHub Pages workflow already reads those secrets during `npm run build`.
