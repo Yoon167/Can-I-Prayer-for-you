@@ -291,7 +291,7 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
 
 export async function signOutOfPrayerApp() {
   if (isSupabaseConfigured && supabase) {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await supabase.auth.signOut({ scope: 'local' })
 
     if (error) {
       return { error: error.message }

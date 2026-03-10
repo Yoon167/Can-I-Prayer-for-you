@@ -1391,7 +1391,11 @@ function App() {
       return
     }
 
-    setAuthSession(null)
+    applyAuthSession(null)
+    setSelectedRole('member')
+    setMemberProfile(defaultMemberProfile)
+    setMemberProfileForm(defaultMemberProfile)
+    setMemberProfileStatus('')
     const fallbackTeaching = getFallbackTeaching()
     setHomeContent((currentContent) => ({
       ...currentContent,
@@ -1410,6 +1414,7 @@ function App() {
     setPassword('')
     setAuthError('')
     setAuthNotice('')
+    setCurrentView('home')
     setAuthBusy(false)
   }
 
