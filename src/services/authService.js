@@ -6,6 +6,18 @@ const localAccountsStorageKey = 'prayer-app-local-accounts'
 const authRateLimitStorageKey = 'prayer-app-auth-rate-limit-until'
 const authRateLimitCooldownMs = 60 * 1000
 
+function normalizeEmailAddress(email) {
+  return email.trim().toLowerCase()
+}
+
+function isValidEmailAddress(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+function isValidPassword(password) {
+  return password.length >= 6
+}
+
 function getAuthRateLimitUntil() {
   if (typeof window === 'undefined') {
     return 0
@@ -96,6 +108,10 @@ function normalizeSupabaseAuthError(error) {
     return getAuthRateLimitMessage()
   }
 
+  if ((error?.message?.toLowerCase?.() ?? '').includes('user already registered')) {
+    return 'That email is already registered. Try signing in, or use resend confirmation if the account is still waiting to be confirmed.'
+  }
+
   if (isEmailConfirmationError(error)) {
     return 'Your email is not confirmed yet. Open the confirmation email, or resend it below.'
   }
@@ -105,6 +121,10 @@ function normalizeSupabaseAuthError(error) {
   }
 
   return error?.message ?? 'Authentication is unavailable right now.'
+}
+
+function isPendingOrObfuscatedSignupUser(user) {
+  return Array.isArray(user?.identities) && user.identities.length === 0
 }
 
 export async function completePrayerAppEmailConfirmationFromUrl() {
@@ -355,7 +375,7 @@ async function buildSupabaseSessionFromUser(user) {
 
 export async function signInToPrayerApp({ email, password }) {
   if (isSupabaseConfigured && supabase) {
-    const trimmedEmail = email.trim()
+    const trimmedEmail = normalizeEmailAddress(email)
 
     if (!trimmedEmail || !password) {
       return { error: 'Enter your email and password to continue.' }
@@ -413,10 +433,18 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
     accountType: 'member',
   }
   const role = 'member'
-  const trimmedEmail = email.trim()
+  const trimmedEmail = normalizeEmailAddress(email)
 
   if (!trimmedEmail || !password) {
     return { error: 'Enter your email and password to create an account.' }
+  }
+
+  if (!isValidEmailAddress(trimmedEmail)) {
+    return { error: 'Enter a valid email address to create an account.' }
+  }
+
+  if (!isValidPassword(password)) {
+    return { error: 'Password must be at least 6 characters long.' }
   }
 
   if (isSupabaseConfigured && supabase) {
@@ -442,6 +470,16 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
 
     clearAuthRateLimitCooldown()
 
+    if (isPendingOrObfuscatedSignupUser(data.user)) {
+      return {
+        session: null,
+        pendingConfirmationEmail: trimmedEmail,
+        requiresEmailConfirmation: true,
+        message:
+          'This email may already be registered or still waiting for confirmation. Try signing in, or resend the confirmation email below.',
+      }
+    }
+
     if (!data.session) {
       return {
         session: null,
@@ -460,13 +498,13 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
 
   const existingAccounts = loadLocalAccounts()
 
-  if (existingAccounts.some((account) => account.email?.toLowerCase() === email.trim().toLowerCase())) {
+  if (existingAccounts.some((account) => account.email?.toLowerCase() === trimmedEmail)) {
     return { error: 'An account with that email already exists.' }
   }
 
   const localAccount = {
     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
-    email: email.trim().toLowerCase(),
+    email: trimmedEmail,
     password,
     role,
     memberProfile: normalizedProfile,
@@ -642,10 +680,14 @@ export function subscribeToPrayerAuthChanges(roleOptions, onSessionChange) {
 }
 
 export async function resendPrayerAppConfirmationEmail(email) {
-  const trimmedEmail = email.trim()
+  const trimmedEmail = normalizeEmailAddress(email)
 
   if (!trimmedEmail) {
     return { error: 'Enter your email address before resending the confirmation email.' }
+  }
+
+  if (!isValidEmailAddress(trimmedEmail)) {
+    return { error: 'Enter a valid email address before resending the confirmation email.' }
   }
 
   if (!isSupabaseConfigured || !supabase) {

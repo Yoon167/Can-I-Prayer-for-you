@@ -447,6 +447,24 @@ for delete
 to authenticated
 using (auth.uid() = user_id);
 
+do $$
+begin
+  if exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) and not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'journal_entries'
+  ) then
+    execute 'alter publication supabase_realtime add table public.journal_entries';
+  end if;
+end;
+$$;
+
 create table if not exists public.daily_teachings (
   id uuid primary key default gen_random_uuid(),
   publish_date date not null unique,
@@ -526,6 +544,24 @@ on public.daily_teachings
 for delete
 to authenticated
 using (public.prayer_app_is_privileged_role());
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_publication
+    where pubname = 'supabase_realtime'
+  ) and not exists (
+    select 1
+    from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'daily_teachings'
+  ) then
+    execute 'alter publication supabase_realtime add table public.daily_teachings';
+  end if;
+end;
+$$;
 
 insert into public.daily_teachings (
   publish_date,
