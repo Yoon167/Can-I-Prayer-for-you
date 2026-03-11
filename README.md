@@ -116,7 +116,6 @@ When your final logo is ready:
 If you want a different logo size or spacing in the app, adjust the logo styles in [src/App.css](src/App.css).
 
 ## Run locally
-
 ```bash
 npm install
 npm run dev
@@ -132,7 +131,6 @@ If the live devotion feed is unavailable, the app falls back to the built-in cur
 To manage daily teaching from the app, run [supabase/daily_teachings.sql](supabase/daily_teachings.sql) in Supabase SQL Editor. After that, pastor- and owner-level profiles can edit the daily teaching from the Profile screen, and the home page will pull the latest published teaching from Supabase.
 
 ## Supabase auth setup
-
 1. Copy `.env.example` to `.env`.
 2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` from your Supabase project.
 3. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` if you want to provision users from this repo.
@@ -171,164 +169,24 @@ If Supabase is not configured, the member profile is stored locally in browser s
 
 ## Shared prayer requests across devices
 
-To let signed-in members share the same prayer request list across devices, run [supabase/prayer_requests.sql](supabase/prayer_requests.sql) in Supabase SQL Editor.
+To let signed-in members share the same prayer request list across devices, run [supabase/bootstrap.sql](supabase/bootstrap.sql) in Supabase SQL Editor.
 
-That script does three things:
+That is the authoritative script for the current app. It creates and upgrades the prayer-request schema used by the latest build, including:
 
-- creates the `prayer_requests` table if it does not exist
-- adds any missing workflow columns if you started from an older version
-- installs role-aware RLS policies and a trigger that enforces workflow transitions
-- adds `public.prayer_requests` to `supabase_realtime` so request changes appear on other signed-in devices
+- the `prayer_requests` table itself
+- newer columns such as `owner_user_id`, `visibility_scope`, `follow_up_status`, `follow_up_messages`, `prayed_notice`, `prayed_notified_at`, `prayed_by`, `testimony_text`, and `testimony_shared`
+- role-aware RLS policies and the workflow guard trigger
+- `supabase_realtime` wiring so shared request updates appear across signed-in devices
 
 The policy model is:
 
-- `intercessor`, `pastor`, and `prayer-core` can read and create requests
-- all three roles can update queue and prayed state from the app
+- `member`, `intercessor`, `pastor`, and `prayer-core` can create requests
+- `team` requests are readable by valid signed-in roles, while `pastoral` requests stay limited to the owner or privileged roles
+- members can update only their own requests in the limited ways allowed by the workflow guard
 - only `pastor` and `prayer-core` can delete requests
 - only `pastor` and `prayer-core` can move requests out of pastoral review
 
-Reference SQL:
-
-```sql
-create extension if not exists pgcrypto;
-
-create table if not exists public.prayer_requests (
-	id text primary key default gen_random_uuid()::text,
-	label text not null,
-	completed boolean not null default false,
-	answered_at text,
-	answered_note text not null default '',
-	requested_by text not null,
-	is_anonymous boolean not null default false,
-	workflow_status text not null default 'queue',
-	category text not null default 'Community care',
-	confidentiality text not null default 'Intercessor safe',
-	submitted_by text not null default 'Prayer app',
-	assigned_to text not null default 'Open team',
-	flagged_at text,
-	prayed_at text,
-	created_at timestamptz not null default timezone('utc', now())
-);
-
-alter table public.prayer_requests
-	add column if not exists completed boolean not null default false,
-	add column if not exists answered_at text,
-	add column if not exists answered_note text not null default '',
-	add column if not exists requested_by text not null default 'Community member',
-	add column if not exists is_anonymous boolean not null default false,
-	add column if not exists workflow_status text not null default 'queue',
-	add column if not exists category text not null default 'Community care',
-	add column if not exists confidentiality text not null default 'Intercessor safe',
-	add column if not exists submitted_by text not null default 'Prayer app',
-	add column if not exists assigned_to text not null default 'Open team',
-	add column if not exists flagged_at text,
-	add column if not exists prayed_at text,
-	add column if not exists created_at timestamptz not null default timezone('utc', now());
-
-alter table public.prayer_requests enable row level security;
-
-create or replace function public.prayer_app_current_role()
-returns text
-language sql
-stable
-as $$
-	select coalesce(
-		auth.jwt() -> 'app_metadata' ->> 'role',
-		auth.jwt() -> 'user_metadata' ->> 'role',
-		''
-	)
-$$;
-
-create or replace function public.prayer_app_is_valid_role()
-returns boolean
-language sql
-stable
-as $$
-	select public.prayer_app_current_role() in ('intercessor', 'pastor', 'prayer-core')
-$$;
-
-create or replace function public.prayer_app_is_privileged_role()
-returns boolean
-language sql
-stable
-as $$
-	select public.prayer_app_current_role() in ('pastor', 'prayer-core')
-$$;
-
-create or replace function public.enforce_prayer_request_workflow()
-returns trigger
-language plpgsql
-as $$
-declare
-	actor_role text := public.prayer_app_current_role();
-begin
-	if actor_role not in ('intercessor', 'pastor', 'prayer-core') then
-		raise exception 'Your role is not allowed to change prayer workflow records.';
-	end if;
-
-	if new.workflow_status not in ('queue', 'review', 'prayed', 'answered') then
-		raise exception 'Invalid workflow_status: %', new.workflow_status;
-	end if;
-
-	if actor_role = 'intercessor' then
-		if old.workflow_status = 'review' and new.workflow_status <> 'review' then
-			raise exception 'Only pastors or prayer-core can move requests out of pastoral review.';
-		end if;
-
-		if old.workflow_status = 'prayed' and new.workflow_status <> 'prayed' then
-			raise exception 'Only pastors or prayer-core can reopen prayed requests.';
-		end if;
-	end if;
-
-	if new.workflow_status = 'review' and new.flagged_at is null then
-		raise exception 'flagged_at is required when workflow_status is review.';
-	end if;
-
-	if new.workflow_status = 'prayed' and new.prayed_at is null then
-		raise exception 'prayed_at is required when workflow_status is prayed.';
-	end if;
-
-	return new;
-end;
-$$;
-
-drop trigger if exists prayer_request_workflow_guard on public.prayer_requests;
-
-create trigger prayer_request_workflow_guard
-before update on public.prayer_requests
-for each row
-execute function public.enforce_prayer_request_workflow();
-
-drop policy if exists "Authenticated users can read prayer requests" on public.prayer_requests;
-drop policy if exists "Authenticated users can insert prayer requests" on public.prayer_requests;
-drop policy if exists "Authenticated users can update prayer requests" on public.prayer_requests;
-drop policy if exists "Authenticated users can delete prayer requests" on public.prayer_requests;
-
-create policy "Authenticated users can read prayer requests"
-on public.prayer_requests
-for select
-to authenticated
-using (public.prayer_app_is_valid_role());
-
-create policy "Authenticated users can insert prayer requests"
-on public.prayer_requests
-for insert
-to authenticated
-with check (public.prayer_app_is_valid_role());
-
-create policy "Authenticated users can update prayer requests"
-on public.prayer_requests
-for update
-to authenticated
-using (public.prayer_app_is_valid_role())
-with check (public.prayer_app_is_valid_role());
-
-create policy "Privileged users can delete prayer requests"
-on public.prayer_requests
-for delete
-to authenticated
-using (public.prayer_app_is_privileged_role());
-```
+If you need a prayer-request-only upgrade instead of the full setup, [supabase/prayer_requests.sql](supabase/prayer_requests.sql) is kept in sync with the same schema shape, but `bootstrap.sql` should be your default path.
 
 Once the table exists, the main request list, swipe queue, pastoral review, and prayed deck all sync through Supabase for signed-in users. If the table is missing, the app stays usable with local-only request storage.
 
