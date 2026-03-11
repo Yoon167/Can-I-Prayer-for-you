@@ -31,19 +31,19 @@ function HomeView({
         <article className="panel panel-wide home-panel">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Prayer lounge</p>
+              <p className="eyebrow">Your feed</p>
               <h2>{`Hi ${memberName}`}</h2>
               <p className="role-summary">{`${accountType} account moving through the ${activeRoleLabel} prayer flow.`}</p>
             </div>
-            <span className="panel-tag">Settle in</span>
+            <span className="panel-tag">Fresh today</span>
           </div>
 
           <div className="home-mission-banner">
-            <p className="moment-time">Ambient prayer place</p>
-            <h3>A warm prayer corner for people, churches, and needs you want to keep close.</h3>
+            <p className="moment-time">Prayer highlights</p>
+            <h3>A social-style prayer view for the needs, praises, and follow-ups you want near.</h3>
             <p>
-              Hold local needs and global burdens in a space that feels restful, intimate, and easy
-              to return to for a few quiet moments.
+              Move through open needs, answered moments, and pastoral care updates in a cleaner,
+              lighter feed that works well on phone and laptop.
             </p>
           </div>
 

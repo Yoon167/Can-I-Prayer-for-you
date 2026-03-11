@@ -2,11 +2,11 @@ function HeroPanel({ answeredCount, completedCount, activeCount, requestInputRef
   return (
     <section className="hero-panel">
       <div className="hero-copy">
-        <p className="eyebrow">Prayer room</p>
-        <h1>Step into a quiet place built for prayer, reflection, and steady hope.</h1>
+        <p className="eyebrow">Prayer feed</p>
+        <h1>See today&apos;s prayer life in one clean, scrollable place.</h1>
         <p className="hero-text">
-          Gather your requests, gratitude, scripture, and follow-up conversations in one calm
-          space that feels just as natural on a phone as it does on a laptop.
+          Keep requests, gratitude, scripture, and follow-up close together in a layout that feels
+          fast, familiar, and easy to revisit throughout the day.
         </p>
 
         <div className="hero-actions">
@@ -28,11 +28,11 @@ function HeroPanel({ answeredCount, completedCount, activeCount, requestInputRef
       </div>
 
       <aside className="hero-card">
-        <p className="card-label">Today&apos;s atmosphere</p>
-        <h2>Soft light, open hands, and enough room to listen.</h2>
+        <p className="card-label">Today&apos;s snapshot</p>
+        <h2>Prayer, progress, and quiet focus all in one glance.</h2>
         <p>
-          Move through today&apos;s prayer list like a small prayer journal wall: quiet, focused, and
-          easy to revisit throughout the day.
+          Treat the app like a daily prayer feed: open it quickly, catch up on what matters, and
+          return when you have a few more minutes to pray.
         </p>
 
         <div className="hero-metrics">

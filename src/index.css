@@ -1,26 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Manrope:wght@400;500;700;800&display=swap');
 
 :root {
   font-family: 'Manrope', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #2b231c;
+  color: #1f1f24;
   background:
-    radial-gradient(circle at top, rgba(255, 244, 224, 0.88), transparent 26%),
-    linear-gradient(180deg, rgba(245, 236, 221, 0.88), rgba(223, 215, 204, 0.96)),
+    radial-gradient(circle at top, rgba(255, 216, 232, 0.18), transparent 24%),
+    radial-gradient(circle at right 20%, rgba(255, 238, 204, 0.2), transparent 28%),
+    linear-gradient(180deg, rgba(250, 250, 252, 0.96), rgba(243, 244, 248, 0.98)),
     url('/worship-background.svg') center top / cover fixed no-repeat;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --color-ink: #2b231c;
-  --color-muted: #6a6057;
-  --color-accent: #8a5f36;
-  --color-accent-soft: #d9bf97;
-  --color-moss: #5f7868;
-  --color-panel: rgba(255, 249, 241, 0.72);
-  --color-panel-strong: rgba(255, 252, 247, 0.88);
-  --font-display: 'Cormorant Garamond', serif;
+  --color-ink: #1f1f24;
+  --color-muted: #6c6f7d;
+  --color-accent: #c45186;
+  --color-accent-soft: #ffd8e8;
+  --color-moss: #5d7f77;
+  --color-panel: rgba(255, 255, 255, 0.78);
+  --color-panel-strong: rgba(255, 255, 255, 0.92);
+  --font-display: 'Sora', sans-serif;
 }
 
 * {
@@ -35,8 +36,9 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    radial-gradient(circle at top center, rgba(255, 245, 225, 0.9), transparent 24%),
-    linear-gradient(180deg, rgba(245, 236, 221, 0.8), rgba(224, 214, 203, 0.95)),
+    radial-gradient(circle at top center, rgba(255, 223, 237, 0.28), transparent 22%),
+    radial-gradient(circle at left bottom, rgba(208, 236, 255, 0.22), transparent 24%),
+    linear-gradient(180deg, rgba(250, 250, 252, 0.94), rgba(243, 244, 248, 0.98)),
     url('/worship-background.svg') center top / cover fixed no-repeat;
 }
 
@@ -51,19 +53,19 @@ body::after {
 }
 
 body::before {
-  top: -90px;
-  right: -30px;
-  width: 360px;
-  height: 360px;
-  background: radial-gradient(circle, rgba(255, 241, 210, 0.56), rgba(255, 241, 210, 0.08) 68%, transparent 72%);
+  top: -120px;
+  right: -40px;
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle, rgba(255, 153, 204, 0.22), rgba(255, 153, 204, 0.04) 68%, transparent 72%);
 }
 
 body::after {
-  left: -90px;
-  bottom: 10px;
-  width: 320px;
-  height: 320px;
-  background: radial-gradient(circle, rgba(111, 141, 93, 0.26), rgba(111, 141, 93, 0.06) 68%, transparent 72%);
+  left: -120px;
+  bottom: -20px;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, rgba(91, 154, 255, 0.16), rgba(91, 154, 255, 0.04) 68%, transparent 72%);
 }
 
 button,
@@ -89,7 +91,7 @@ button {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(255, 250, 244, 0.18), transparent 18%, transparent 82%, rgba(255, 250, 244, 0.12)),
-    linear-gradient(180deg, rgba(86, 63, 38, 0.04), transparent 22%);
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12), transparent 18%, transparent 82%, rgba(255, 255, 255, 0.08)),
+    linear-gradient(180deg, rgba(17, 24, 39, 0.02), transparent 22%);
   z-index: 0;
 }
