@@ -40,10 +40,54 @@ function getAuthRateLimitMessage() {
   return `Too many sign-in attempts right now. Please wait ${remainingSeconds} seconds and try again.`
 }
 
+function getSupabaseEmailRedirectUrl() {
+  if (typeof window === 'undefined') {
+    return undefined
+  }
+
+  const redirectUrl = new URL(window.location.href)
+  redirectUrl.search = ''
+  redirectUrl.hash = ''
+  return redirectUrl.toString()
+}
+
+function clearSupabaseAuthUrlParams() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const nextUrl = new URL(window.location.href)
+  nextUrl.searchParams.delete('token_hash')
+  nextUrl.searchParams.delete('type')
+  nextUrl.searchParams.delete('error')
+  nextUrl.searchParams.delete('error_code')
+  nextUrl.searchParams.delete('error_description')
+
+  window.history.replaceState({}, document.title, nextUrl.toString())
+}
+
+function normalizeSupabaseUrlMessage(rawMessage, fallbackMessage) {
+  if (!rawMessage) {
+    return fallbackMessage
+  }
+
+  return rawMessage.replace(/\+/g, ' ')
+}
+
 function isRateLimitError(error) {
   const message = error?.message?.toLowerCase?.() ?? ''
 
   return error?.status === 429 || message.includes('rate limit') || message.includes('too many requests')
+}
+
+function isEmailConfirmationError(error) {
+  const message = error?.message?.toLowerCase?.() ?? ''
+
+  return (
+    message.includes('email not confirmed') ||
+    message.includes('email_not_confirmed') ||
+    message.includes('confirm your email')
+  )
 }
 
 function normalizeSupabaseAuthError(error) {
@@ -52,7 +96,65 @@ function normalizeSupabaseAuthError(error) {
     return getAuthRateLimitMessage()
   }
 
+  if (isEmailConfirmationError(error)) {
+    return 'Your email is not confirmed yet. Open the confirmation email, or resend it below.'
+  }
+
+  if ((error?.message?.toLowerCase?.() ?? '').includes('email address not authorized')) {
+    return 'Supabase could not send the confirmation email. If you are testing, add the address to your Supabase team or finish enabling custom SMTP.'
+  }
+
   return error?.message ?? 'Authentication is unavailable right now.'
+}
+
+export async function completePrayerAppEmailConfirmationFromUrl() {
+  if (!isSupabaseConfigured || !supabase || typeof window === 'undefined') {
+    return { handled: false }
+  }
+
+  const currentUrl = new URL(window.location.href)
+  const tokenHash = currentUrl.searchParams.get('token_hash')
+  const verificationType = currentUrl.searchParams.get('type')
+  const authError = currentUrl.searchParams.get('error')
+  const authErrorDescription = currentUrl.searchParams.get('error_description')
+
+  if (authError || authErrorDescription) {
+    clearSupabaseAuthUrlParams()
+    return {
+      handled: true,
+      error: normalizeSupabaseUrlMessage(
+        authErrorDescription,
+        'The email confirmation link could not be completed. Request a fresh confirmation email and try again.',
+      ),
+    }
+  }
+
+  if (!tokenHash || !verificationType) {
+    return { handled: false }
+  }
+
+  if (!['signup', 'invite', 'email', 'email_change'].includes(verificationType)) {
+    return { handled: false }
+  }
+
+  const { error } = await supabase.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: verificationType,
+  })
+
+  clearSupabaseAuthUrlParams()
+
+  if (error) {
+    return {
+      handled: true,
+      error: normalizeSupabaseAuthError(error),
+    }
+  }
+
+  return {
+    handled: true,
+    message: 'Email confirmed successfully. Finishing sign-in...',
+  }
 }
 
 function loadLocalAccounts() {
@@ -253,7 +355,9 @@ async function buildSupabaseSessionFromUser(user) {
 
 export async function signInToPrayerApp({ email, password }) {
   if (isSupabaseConfigured && supabase) {
-    if (!email.trim() || !password) {
+    const trimmedEmail = email.trim()
+
+    if (!trimmedEmail || !password) {
       return { error: 'Enter your email and password to continue.' }
     }
 
@@ -262,12 +366,15 @@ export async function signInToPrayerApp({ email, password }) {
     }
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: trimmedEmail,
       password,
     })
 
     if (error) {
-      return { error: normalizeSupabaseAuthError(error) }
+      return {
+        error: normalizeSupabaseAuthError(error),
+        requiresEmailConfirmation: isEmailConfirmationError(error),
+      }
     }
 
     clearAuthRateLimitCooldown()
@@ -306,8 +413,9 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
     accountType: 'member',
   }
   const role = 'member'
+  const trimmedEmail = email.trim()
 
-  if (!email.trim() || !password) {
+  if (!trimmedEmail || !password) {
     return { error: 'Enter your email and password to create an account.' }
   }
 
@@ -317,9 +425,10 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
     }
 
     const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
+      email: trimmedEmail,
       password,
       options: {
+        emailRedirectTo: getSupabaseEmailRedirectUrl(),
         data: {
           role,
           memberProfile: normalizedProfile,
@@ -336,7 +445,10 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
     if (!data.session) {
       return {
         session: null,
-        message: 'Account created. Sign in with your email and password to continue.',
+        pendingConfirmationEmail: trimmedEmail,
+        requiresEmailConfirmation: true,
+        message:
+          'Account created. Check your email for the confirmation link before signing in. If it does not arrive, resend it below.',
       }
     }
 
@@ -526,5 +638,39 @@ export function subscribeToPrayerAuthChanges(roleOptions, onSessionChange) {
 
   return () => {
     subscription.unsubscribe()
+  }
+}
+
+export async function resendPrayerAppConfirmationEmail(email) {
+  const trimmedEmail = email.trim()
+
+  if (!trimmedEmail) {
+    return { error: 'Enter your email address before resending the confirmation email.' }
+  }
+
+  if (!isSupabaseConfigured || !supabase) {
+    return { error: 'Confirmation emails are only available when Supabase auth is configured.' }
+  }
+
+  if (getAuthRateLimitUntil() > Date.now()) {
+    return { error: getAuthRateLimitMessage() }
+  }
+
+  const { error } = await supabase.auth.resend({
+    type: 'signup',
+    email: trimmedEmail,
+    options: {
+      emailRedirectTo: getSupabaseEmailRedirectUrl(),
+    },
+  })
+
+  if (error) {
+    return { error: normalizeSupabaseAuthError(error) }
+  }
+
+  clearAuthRateLimitCooldown()
+
+  return {
+    message: 'Confirmation email sent. Check your inbox and spam folder for the latest message.',
   }
 }

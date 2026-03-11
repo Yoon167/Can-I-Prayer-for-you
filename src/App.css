@@ -338,6 +338,10 @@
   min-width: 220px;
 }
 
+.auth-resend {
+  min-width: 220px;
+}
+
 .auth-hint {
   margin: 0;
   color: var(--color-muted);

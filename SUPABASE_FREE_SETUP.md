@@ -20,9 +20,29 @@ This app already supports Supabase. If you want real shared sign-in and multi-de
 
 1. Open `Authentication` in Supabase.
 2. Enable `Email` sign-in.
-3. For the simplest first launch, turn off email confirmation while testing.
-4. Set the site URL to `https://yoon167.github.io/Can-I-Prayer-for-you/`.
-5. Add the same URL to the redirect URL list.
+3. Leave email confirmation on so new members must confirm ownership of their address.
+4. Open `Authentication` > `SMTP Settings` and enable custom SMTP.
+5. Add your Resend SMTP host, port, username, password, sender name, and sender address.
+6. Set the site URL to your deployed app URL. If you are using GitHub Pages for this project, use `https://yoon167.github.io/Can-I-Prayer-for-you/`.
+7. Add that same URL to the redirect URL list.
+
+Important notes:
+
+- Without custom SMTP, Supabase only delivers auth email to project team members and the default mailer is heavily rate-limited.
+- If confirmation links open but do not complete sign-in, the usual cause is a mismatched site URL or redirect URL.
+- If you switch to Resend SMTP, test with a real non-team email address after saving the SMTP settings.
+
+## 2.1 Confirmation link callback for static hosting
+
+Because this app is deployed as a static single-page app, the safest callback target is the main app URL, not a nested route like `/auth/confirm`.
+
+If you customize the Supabase confirmation email template to use token hashes, point it back to your main app URL in this shape:
+
+```html
+<a href="{{ .SiteURL }}?token_hash={{ .TokenHash }}&type={{ .Type }}">Confirm your email</a>
+```
+
+The app now detects those parameters on load, verifies the token with Supabase, clears the URL, and restores the signed-in session.
 
 ## 3. Create the app tables
 

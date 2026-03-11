@@ -7,12 +7,14 @@ function AuthPanel({
   signUpForm,
   authError,
   authNotice,
+  pendingConfirmationEmail,
   authBusy,
   providerConfigured,
   onModeChange,
   onEmailChange,
   onPasswordChange,
   onSignUpChange,
+  onResendConfirmation,
   onSignInSubmit,
   onSignUpSubmit,
 }) {
@@ -90,10 +92,17 @@ function AuthPanel({
                 <button type="submit" className="form-action auth-submit" disabled={authBusy}>
                   {authBusy ? 'Signing in...' : 'Sign in'}
                 </button>
+                {pendingConfirmationEmail && providerConfigured ? (
+                  <button type="button" className="ghost-action auth-resend" onClick={onResendConfirmation} disabled={authBusy}>
+                    Resend confirmation email
+                  </button>
+                ) : null}
                 <p className="auth-hint">
-                  {providerConfigured
-                    ? 'Your member profile, prayer requests, and journal follow your account.'
-                    : 'Your member profile, prayer requests, and journal stay on this device.'}
+                  {pendingConfirmationEmail && providerConfigured
+                    ? `Waiting for confirmation on ${pendingConfirmationEmail}.`
+                    : providerConfigured
+                      ? 'Your member profile, prayer requests, and journal follow your account.'
+                      : 'Your member profile, prayer requests, and journal stay on this device.'}
                 </p>
               </div>
             </div>

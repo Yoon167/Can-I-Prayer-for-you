@@ -37,6 +37,8 @@ import {
 } from './data/dashboardData.js'
 import { isSupabaseConfigured } from './lib/supabaseClient.js'
 import {
+  completePrayerAppEmailConfirmationFromUrl,
+  resendPrayerAppConfirmationEmail,
   restorePrayerAppSession,
   savePrayerAppMemberProfile,
   signInToPrayerApp,
@@ -178,6 +180,7 @@ function App() {
   const [signUpForm, setSignUpForm] = useState(defaultMemberProfile)
   const [authError, setAuthError] = useState('')
   const [authNotice, setAuthNotice] = useState('')
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState('')
   const [authBusy, setAuthBusy] = useState(false)
   const [currentView, setCurrentView] = useState('home')
   const [focusItems, setFocusItems] = useState(() =>
@@ -266,6 +269,10 @@ function App() {
 
     if (normalizedSession?.role) {
       setSelectedRole(normalizedSession.role)
+    }
+
+    if (normalizedSession) {
+      setPendingConfirmationEmail('')
     }
 
     if (normalizedSession?.provider !== 'supabase') {
@@ -645,6 +652,30 @@ function App() {
 
     let isMounted = true
 
+    const initializeSupabaseAuth = async () => {
+      const callbackResult = await completePrayerAppEmailConfirmationFromUrl()
+
+      if (!isMounted) {
+        return
+      }
+
+      if (callbackResult.error) {
+        applyAuthSession(null)
+        setAuthError(callbackResult.error)
+      } else if (callbackResult.message) {
+        setAuthNotice(callbackResult.message)
+      }
+
+      const session = await restorePrayerAppSession(roleOptions)
+
+      if (!isMounted) {
+        return
+      }
+
+      applyAuthSession(session)
+      setAuthReady(true)
+    }
+
     const handleAuthRestoreFailure = () => {
       if (!isMounted) {
         return
@@ -657,15 +688,7 @@ function App() {
       setAuthReady(true)
     }
 
-    restorePrayerAppSession(roleOptions)
-      .then((session) => {
-        if (!isMounted) {
-          return
-        }
-
-        applyAuthSession(session)
-        setAuthReady(true)
-      })
+    initializeSupabaseAuth()
       .catch(() => {
         handleAuthRestoreFailure()
       })
@@ -2115,12 +2138,16 @@ function App() {
     setAuthBusy(true)
     resetAuthMessages()
 
-    const { session, error } = await signInToPrayerApp({
+    const { session, error, requiresEmailConfirmation } = await signInToPrayerApp({
       email,
       password,
     })
 
     if (error) {
+      if (requiresEmailConfirmation) {
+        setPendingConfirmationEmail(email.trim())
+      }
+
       setAuthError(error)
       setAuthBusy(false)
       return
@@ -2158,7 +2185,7 @@ function App() {
       return
     }
 
-    const { session, message, error } = await signUpToPrayerApp({
+    const { session, message, error, requiresEmailConfirmation, pendingConfirmationEmail: confirmedEmail } = await signUpToPrayerApp({
       email,
       password,
       memberProfile: nextProfile,
@@ -2172,6 +2199,8 @@ function App() {
 
     if (session) {
       applyAuthSession(session)
+    } else if (requiresEmailConfirmation) {
+      setPendingConfirmationEmail(confirmedEmail ?? email.trim())
     }
 
     setMemberProfile(nextProfile)
@@ -2181,6 +2210,25 @@ function App() {
     setAuthMode(session ? 'sign-in' : 'sign-in')
     setPassword('')
     setEmail(session ? '' : email)
+    setAuthBusy(false)
+  }
+
+  async function handleResendConfirmation() {
+    const targetEmail = (pendingConfirmationEmail || email).trim()
+
+    setAuthBusy(true)
+    resetAuthMessages()
+
+    const { message, error } = await resendPrayerAppConfirmationEmail(targetEmail)
+
+    if (error) {
+      setAuthError(error)
+      setAuthBusy(false)
+      return
+    }
+
+    setPendingConfirmationEmail(targetEmail)
+    setAuthNotice(message || 'Confirmation email sent.')
     setAuthBusy(false)
   }
 
@@ -2219,6 +2267,7 @@ function App() {
     })
     setEmail('')
     setPassword('')
+    setPendingConfirmationEmail('')
     setAuthError('')
     setAuthNotice(
       error
@@ -2242,6 +2291,7 @@ function App() {
         signUpForm={signUpForm}
         authError={authError}
         authNotice={authNotice}
+        pendingConfirmationEmail={pendingConfirmationEmail}
         authBusy={authBusy}
         providerConfigured={isSupabaseConfigured}
         onModeChange={(mode) => {
@@ -2250,6 +2300,14 @@ function App() {
         }}
         onEmailChange={(value) => {
           setEmail(value)
+
+          if (
+            pendingConfirmationEmail &&
+            value.trim().toLowerCase() !== pendingConfirmationEmail.toLowerCase()
+          ) {
+            setPendingConfirmationEmail('')
+          }
+
           resetAuthMessages()
         }}
         onPasswordChange={(value) => {
@@ -2257,6 +2315,7 @@ function App() {
           resetAuthMessages()
         }}
         onSignUpChange={handleSignUpChange}
+        onResendConfirmation={handleResendConfirmation}
         onSignInSubmit={handleSignIn}
         onSignUpSubmit={handleSignUp}
       />
