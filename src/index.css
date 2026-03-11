@@ -1,21 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Manrope:wght@400;500;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Manrope:wght@400;500;700;800&display=swap');
 
 :root {
   font-family: 'Manrope', sans-serif;
   line-height: 1.5;
   font-weight: 400;
-  color: #2f2418;
+  color: #2b231c;
   background:
-    linear-gradient(180deg, rgba(247, 239, 227, 0.8), rgba(235, 227, 215, 0.94)),
+    radial-gradient(circle at top, rgba(255, 244, 224, 0.88), transparent 26%),
+    linear-gradient(180deg, rgba(245, 236, 221, 0.88), rgba(223, 215, 204, 0.96)),
     url('/worship-background.svg') center top / cover fixed no-repeat;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --color-ink: #2f2418;
-  --color-muted: #6f6256;
-  --color-accent: #94623d;
-  --font-display: 'Fraunces', serif;
+  --color-ink: #2b231c;
+  --color-muted: #6a6057;
+  --color-accent: #8a5f36;
+  --color-accent-soft: #d9bf97;
+  --color-moss: #5f7868;
+  --color-panel: rgba(255, 249, 241, 0.72);
+  --color-panel-strong: rgba(255, 252, 247, 0.88);
+  --font-display: 'Cormorant Garamond', serif;
 }
 
 * {
@@ -30,7 +35,8 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(247, 239, 227, 0.76), rgba(235, 227, 215, 0.92)),
+    radial-gradient(circle at top center, rgba(255, 245, 225, 0.9), transparent 24%),
+    linear-gradient(180deg, rgba(245, 236, 221, 0.8), rgba(224, 214, 203, 0.95)),
     url('/worship-background.svg') center top / cover fixed no-repeat;
 }
 
@@ -45,19 +51,19 @@ body::after {
 }
 
 body::before {
-  top: -80px;
-  right: -20px;
-  width: 280px;
-  height: 280px;
-  background: rgba(255, 247, 229, 0.24);
+  top: -90px;
+  right: -30px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(255, 241, 210, 0.56), rgba(255, 241, 210, 0.08) 68%, transparent 72%);
 }
 
 body::after {
-  left: -60px;
-  bottom: 40px;
-  width: 220px;
-  height: 220px;
-  background: rgba(111, 141, 93, 0.22);
+  left: -90px;
+  bottom: 10px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(111, 141, 93, 0.26), rgba(111, 141, 93, 0.06) 68%, transparent 72%);
 }
 
 button,
@@ -73,4 +79,17 @@ button {
 
 #root {
   min-height: 100vh;
+  position: relative;
+  isolation: isolate;
+}
+
+#root::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255, 250, 244, 0.18), transparent 18%, transparent 82%, rgba(255, 250, 244, 0.12)),
+    linear-gradient(180deg, rgba(86, 63, 38, 0.04), transparent 22%);
+  z-index: 0;
 }
