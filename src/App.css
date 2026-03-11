@@ -242,6 +242,46 @@
   gap: 0.7rem;
 }
 
+.notification-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.notification-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgba(118, 85, 42, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-muted);
+  font-weight: 700;
+}
+
+.notification-filter-chip-active {
+  color: #fff9f1;
+  border-color: transparent;
+  background: linear-gradient(135deg, #30473b, #94623d);
+}
+
+.notification-filter-count {
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.28rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(148, 98, 61, 0.12);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.notification-filter-chip-active .notification-filter-count {
+  background: rgba(255, 249, 241, 0.16);
+}
+
 .notification-item {
   display: grid;
   gap: 0.45rem;
@@ -1837,6 +1877,15 @@
   .notification-item-meta {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .notification-filter-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .notification-filter-chip {
+    justify-content: space-between;
   }
 
   .nav-button {

@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 function NotificationCenter({
   notifications,
   unreadCount,
@@ -12,10 +14,29 @@ function NotificationCenter({
   onToggleWelcomeVoice,
   onReplayWelcomeVoice,
 }) {
+  const [selectedFilter, setSelectedFilter] = useState('all')
   const hasNotifications = notifications.length > 0
   const canRequestPermission = notificationPermission === 'default'
   const browserNotificationsEnabled = notificationPermission === 'granted'
   const browserNotificationsUnavailable = notificationPermission === 'unsupported'
+  const filterOptions = [
+    { id: 'all', label: 'All', matches: () => true },
+    {
+      id: 'prayer',
+      label: 'Prayer',
+      matches: (notification) => notification.type === 'request' || notification.type === 'prayed',
+    },
+    { id: 'follow-up', label: 'Follow-up', matches: (notification) => notification.type === 'followUp' },
+    { id: 'answered', label: 'Answered', matches: (notification) => notification.type === 'answered' },
+    { id: 'system', label: 'System', matches: (notification) => notification.type === 'system' },
+  ]
+  const activeFilter = filterOptions.find((option) => option.id === selectedFilter) ?? filterOptions[0]
+  const visibleNotifications = notifications.filter(activeFilter.matches)
+  const hasVisibleNotifications = visibleNotifications.length > 0
+
+  function getFilterCount(option) {
+    return notifications.filter(option.matches).length
+  }
 
   return (
     <>
@@ -111,9 +132,29 @@ function NotificationCenter({
           ) : null}
         </div>
 
-        {hasNotifications ? (
+        <div className="notification-filter-bar" role="tablist" aria-label="Notification categories">
+          {filterOptions.map((option) => {
+            const count = getFilterCount(option)
+
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="tab"
+                aria-selected={selectedFilter === option.id}
+                className={selectedFilter === option.id ? 'notification-filter-chip notification-filter-chip-active' : 'notification-filter-chip'}
+                onClick={() => setSelectedFilter(option.id)}
+              >
+                <span>{option.label}</span>
+                <span className="notification-filter-count">{count}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {hasVisibleNotifications ? (
           <div className="notification-list" role="list">
-            {notifications.map((notification) => (
+            {visibleNotifications.map((notification) => (
               <button
                 key={notification.id}
                 type="button"
@@ -128,6 +169,11 @@ function NotificationCenter({
                 <span>{notification.detail}</span>
               </button>
             ))}
+          </div>
+        ) : hasNotifications ? (
+          <div className="notification-empty-state">
+            <p className="moment-time">No {activeFilter.label.toLowerCase()} alerts</p>
+            <p>Switch categories to see other prayer activity notifications.</p>
           </div>
         ) : (
           <div className="notification-empty-state">
