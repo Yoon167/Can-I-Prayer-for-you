@@ -3,7 +3,7 @@ function AppLogo({ compact = false, className = '' }) {
 
   return (
     <div className={rootClassName}>
-      <img className="app-logo-mark" src="./brand-mark.svg" alt="Can I Pray for You logo" />
+      <img className="app-logo-mark" src="./app-logo.png" alt="Can I Pray for You logo" />
       {!compact ? (
         <div className="app-logo-copy">
           <p className="eyebrow">Global prayer community</p>
