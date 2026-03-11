@@ -9,6 +9,7 @@ import AuthPanel from './components/AuthPanel.jsx'
 import HeroPanel from './components/HeroPanel.jsx'
 import HomeView from './components/HomeView.jsx'
 import JournalPanel from './components/JournalPanel.jsx'
+import NotificationCenter from './components/NotificationCenter.jsx'
 import PastoralReviewPanel from './components/PastoralReviewPanel.jsx'
 import PrayerListPanel from './components/PrayerListPanel.jsx'
 import PrayerRhythmPanel from './components/PrayerRhythmPanel.jsx'
@@ -187,6 +188,95 @@ const defaultMemberProfile = {
   avatarUrl: '',
 }
 
+const notificationStorageKey = 'prayer-app-notifications'
+const welcomeVoiceEnabledStorageKey = 'prayer-app-welcome-voice-enabled'
+const welcomeVoiceSessionKey = 'prayer-app-welcome-voice-played'
+const notificationTypeLabels = {
+  request: 'Prayer request',
+  answered: 'Answered prayer',
+  followUp: 'Follow-up',
+  prayed: 'Prayer coverage',
+  system: 'System',
+}
+
+function formatNotificationLabel(createdAt) {
+  if (!createdAt) {
+    return 'Just now'
+  }
+
+  try {
+    return new Date(createdAt).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  } catch {
+    return 'Just now'
+  }
+}
+
+function normalizeNotificationEntry(entry) {
+  const type = entry?.type ?? 'system'
+  const createdAt = entry?.createdAt ?? new Date().toISOString()
+
+  return {
+    id: entry?.id ?? createId('notification'),
+    dedupeKey: entry?.dedupeKey ?? '',
+    type,
+    typeLabel: notificationTypeLabels[type] ?? 'System',
+    title: entry?.title ?? 'Prayer app update',
+    detail: entry?.detail ?? '',
+    createdAt,
+    createdLabel: formatNotificationLabel(createdAt),
+    read: Boolean(entry?.read),
+    view: entry?.view ?? 'dashboard',
+  }
+}
+
+function normalizeNotificationEntries(entries) {
+  if (!Array.isArray(entries)) {
+    return []
+  }
+
+  return entries
+    .map(normalizeNotificationEntry)
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+}
+
+function loadStoredNotifications() {
+  if (typeof window === 'undefined') {
+    return []
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(notificationStorageKey)
+    return storedValue ? normalizeNotificationEntries(JSON.parse(storedValue)) : []
+  } catch {
+    return []
+  }
+}
+
+function selectPreferredVoice(voices) {
+  if (!Array.isArray(voices) || voices.length === 0) {
+    return null
+  }
+
+  const preferredVoiceNames = [
+    'Microsoft Aria Online (Natural) - English (United States)',
+    'Microsoft Aria - English (United States)',
+    'Google US English',
+    'Samantha',
+  ]
+
+  return (
+    voices.find((voice) => preferredVoiceNames.includes(voice.name)) ??
+    voices.find((voice) => voice.lang?.toLowerCase?.().startsWith('en-us')) ??
+    voices.find((voice) => voice.lang?.toLowerCase?.().startsWith('en')) ??
+    voices[0]
+  )
+}
+
 function App() {
   const currentBuildId = import.meta.env.VITE_APP_BUILD_ID || 'dev-local'
   const [authReady, setAuthReady] = useState(() => !isSupabaseConfigured)
@@ -299,11 +389,68 @@ function App() {
   const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null)
   const [canInstallApp, setCanInstallApp] = useState(false)
   const [installHint, setInstallHint] = useState('')
+  const [notifications, setNotifications] = useState(() => loadStoredNotifications())
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
+  const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.Notification === 'undefined') {
+      return 'unsupported'
+    }
+
+    return window.Notification.permission
+  })
+  const [welcomeVoiceEnabled, setWelcomeVoiceEnabled] = useState(() => {
+    if (typeof window === 'undefined') {
+      return true
+    }
+
+    return window.localStorage.getItem(welcomeVoiceEnabledStorageKey) !== 'false'
+  })
   const requestInputRef = useRef(null)
   const journalTitleRef = useRef(null)
   const swipeStartXRef = useRef(null)
   const swipePointerIdRef = useRef(null)
+  const previousFocusItemsRef = useRef(null)
   const authUserId = authSession?.userId ?? ''
+
+  const addAppNotification = useCallback(
+    (entry, options = {}) => {
+      const nextNotification = normalizeNotificationEntry(entry)
+      let wasInserted = false
+
+      setNotifications((currentNotifications) => {
+        if (
+          nextNotification.dedupeKey &&
+          currentNotifications.some((notification) => notification.dedupeKey === nextNotification.dedupeKey)
+        ) {
+          return currentNotifications
+        }
+
+        wasInserted = true
+        return normalizeNotificationEntries([nextNotification, ...currentNotifications]).slice(0, 60)
+      })
+
+      if (
+        wasInserted &&
+        options.preferBrowser &&
+        browserNotificationPermission === 'granted' &&
+        typeof window !== 'undefined' &&
+        typeof window.Notification !== 'undefined' &&
+        document.visibilityState !== 'visible'
+      ) {
+        try {
+          new window.Notification(nextNotification.title, {
+            body: nextNotification.detail,
+            icon: './app-logo.png',
+            badge: './pwa-192x192.png',
+            tag: nextNotification.dedupeKey || nextNotification.id,
+          })
+        } catch {
+          // Ignore browser notification failures and keep the in-app feed.
+        }
+      }
+    },
+    [browserNotificationPermission],
+  )
 
   const applyAuthSession = useCallback((session) => {
     const normalizedSession = session
@@ -458,6 +605,110 @@ function App() {
       setCanInstallApp(false)
     }
   }, [deferredInstallPrompt])
+
+  const handleToggleNotificationCenter = useCallback(() => {
+    setNotificationCenterOpen((currentOpen) => !currentOpen)
+  }, [])
+
+  const handleCloseNotificationCenter = useCallback(() => {
+    setNotificationCenterOpen(false)
+  }, [])
+
+  const handleMarkAllNotificationsRead = useCallback(() => {
+    setNotifications((currentNotifications) =>
+      currentNotifications.map((notification) => ({ ...notification, read: true })),
+    )
+  }, [])
+
+  const handleNotificationSelect = useCallback((notificationId, view) => {
+    setNotifications((currentNotifications) =>
+      currentNotifications.map((notification) =>
+        notification.id === notificationId ? { ...notification, read: true } : notification,
+      ),
+    )
+    setCurrentView(view)
+    setNotificationCenterOpen(false)
+  }, [])
+
+  const playWelcomeVoice = useCallback(
+    (forceReplay = false) => {
+      if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') {
+        return
+      }
+
+      if (!welcomeVoiceEnabled && !forceReplay) {
+        return
+      }
+
+      const utterance = new SpeechSynthesisUtterance(
+        'Welcome to Pray for You. Your prayer community is ready for new requests, praise reports, and prayer updates.',
+      )
+      const preferredVoice = selectPreferredVoice(window.speechSynthesis.getVoices())
+
+      if (preferredVoice) {
+        utterance.voice = preferredVoice
+        utterance.lang = preferredVoice.lang || 'en-US'
+      } else {
+        utterance.lang = 'en-US'
+      }
+
+      utterance.rate = 1.01
+      utterance.pitch = 1
+      utterance.volume = 0.9
+
+      window.speechSynthesis.cancel()
+      window.speechSynthesis.speak(utterance)
+    },
+    [welcomeVoiceEnabled],
+  )
+
+  const handleToggleWelcomeVoice = useCallback(() => {
+    setWelcomeVoiceEnabled((currentValue) => {
+      const nextValue = !currentValue
+
+      addAppNotification({
+        type: 'system',
+        title: nextValue ? 'Welcome voice enabled' : 'Welcome voice muted',
+        detail: nextValue
+          ? 'The spoken welcome message will play once per session.'
+          : 'The spoken welcome message is muted until you enable it again.',
+        createdAt: new Date().toISOString(),
+        dedupeKey: `welcome-voice:${nextValue}`,
+        view: 'home',
+      })
+
+      return nextValue
+    })
+  }, [addAppNotification])
+
+  const handleEnableBrowserNotifications = useCallback(async () => {
+    if (typeof window === 'undefined' || typeof window.Notification === 'undefined') {
+      setBrowserNotificationPermission('unsupported')
+      return
+    }
+
+    const permission = await window.Notification.requestPermission()
+    setBrowserNotificationPermission(permission)
+
+    addAppNotification({
+      type: 'system',
+      title:
+        permission === 'granted'
+          ? 'Browser notifications enabled'
+          : permission === 'denied'
+            ? 'Browser notifications blocked'
+            : 'Browser notifications not enabled',
+      detail:
+        permission === 'granted'
+          ? 'You will now get browser alerts when new prayer activity arrives while the app is in the background.'
+          : permission === 'denied'
+            ? 'This browser blocked alerts. You can re-enable them from browser site settings.'
+            : 'Notification permission was dismissed. You can try again later.',
+      createdAt: new Date().toISOString(),
+      dedupeKey: `browser-notification-permission:${permission}`,
+      view: 'home',
+    })
+  }, [addAppNotification])
 
   function deferQueueId(itemId) {
     setDeferredQueueIds((currentIds) => [...currentIds.filter((entryId) => entryId !== itemId), itemId])
@@ -624,8 +875,41 @@ function App() {
   }, [memberProfile])
 
   useEffect(() => {
+    window.localStorage.setItem(notificationStorageKey, JSON.stringify(notifications))
+  }, [notifications])
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      welcomeVoiceEnabledStorageKey,
+      welcomeVoiceEnabled ? 'true' : 'false',
+    )
+  }, [welcomeVoiceEnabled])
+
+  useEffect(() => {
     window.localStorage.setItem(roleStorageKey, selectedRole)
   }, [selectedRole])
+
+  useEffect(() => {
+    previousFocusItemsRef.current = null
+  }, [authUserId])
+
+  useEffect(() => {
+    if (!notificationCenterOpen) {
+      return undefined
+    }
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setNotificationCenterOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [notificationCenterOpen])
 
   useEffect(() => {
     const supportsMatchMedia = typeof window.matchMedia === 'function'
@@ -677,6 +961,25 @@ function App() {
 
     window.localStorage.removeItem(authStorageKey)
   }, [authSession])
+
+  useEffect(() => {
+    if (!authSession || !welcomeVoiceEnabled) {
+      return undefined
+    }
+
+    if (window.sessionStorage.getItem(welcomeVoiceSessionKey) === 'played') {
+      return undefined
+    }
+
+    const timerId = window.setTimeout(() => {
+      playWelcomeVoice()
+      window.sessionStorage.setItem(welcomeVoiceSessionKey, 'played')
+    }, 900)
+
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [authSession, playWelcomeVoice, welcomeVoiceEnabled])
 
   useEffect(() => {
     const refreshMarkerKey = 'prayer-app-refreshed-build-id'
@@ -1244,6 +1547,7 @@ function App() {
     authSession?.email?.split('@')[0] ||
     'Community member'
   const memberNameForGreeting = memberProfile.displayName || memberProfile.fullName || memberDisplayName
+  const unreadNotificationCount = notifications.filter((notification) => !notification.read).length
   const accountTypeLabel =
     activeRole === 'prayer-core'
       ? 'Prayer Core'
@@ -1263,6 +1567,88 @@ function App() {
   const showPastoralReview = activeRole === 'pastor' || activeRole === 'prayer-core'
   const showTeamSpaces = activeRole === 'intercessor' || activeRole === 'prayer-core'
   const showPrayerRhythm = activeRole !== 'pastor'
+
+  useEffect(() => {
+    if (!previousFocusItemsRef.current) {
+      previousFocusItemsRef.current = focusItems
+      return
+    }
+
+    const previousItems = previousFocusItemsRef.current
+    const previousMap = new Map(previousItems.map((item) => [item.id, item]))
+
+    focusItems.forEach((item) => {
+      const previousItem = previousMap.get(item.id)
+
+      if (!previousItem) {
+        addAppNotification(
+          {
+            type: 'request',
+            title: item.ownerUserId && item.ownerUserId === authUserId ? 'Prayer request received' : 'New prayer request',
+            detail: `${item.requestedBy}: ${item.label}`,
+            createdAt: item.flaggedAt || item.prayedAt || item.answeredAt || new Date().toISOString(),
+            dedupeKey: `request:${item.id}:created`,
+            view: 'dashboard',
+          },
+          { preferBrowser: true },
+        )
+      }
+
+      if (previousItem && !previousItem.prayedAt && item.prayedAt) {
+        addAppNotification(
+          {
+            type: 'prayed',
+            title:
+              item.ownerUserId && item.ownerUserId === authUserId
+                ? 'Someone prayed for your request'
+                : 'Prayer request covered',
+            detail: item.prayedNotice || `${item.requestedBy}: ${item.label}`,
+            createdAt: item.prayedAt,
+            dedupeKey: `request:${item.id}:prayed:${item.prayedAt}`,
+            view: 'dashboard',
+          },
+          { preferBrowser: true },
+        )
+      }
+
+      if (previousItem && !previousItem.answeredAt && item.answeredAt) {
+        addAppNotification(
+          {
+            type: 'answered',
+            title: 'Answered prayer update',
+            detail: `${item.requestedBy}: ${item.answeredNote || item.label}`,
+            createdAt: item.answeredAt,
+            dedupeKey: `request:${item.id}:answered:${item.answeredAt}`,
+            view: 'praises',
+          },
+          { preferBrowser: true },
+        )
+      }
+
+      if (previousItem) {
+        const previousMessages = previousItem.followUpMessages ?? []
+        const nextMessages = item.followUpMessages ?? []
+
+        if (nextMessages.length > previousMessages.length) {
+          nextMessages.slice(previousMessages.length).forEach((message) => {
+            addAppNotification(
+              {
+                type: 'followUp',
+                title: 'New follow-up update',
+                detail: `${message.authorName}: ${message.text}`,
+                createdAt: message.createdAt || new Date().toISOString(),
+                dedupeKey: `request:${item.id}:follow-up:${message.id}`,
+                view: 'dashboard',
+              },
+              { preferBrowser: true },
+            )
+          })
+        }
+      }
+    })
+
+    previousFocusItemsRef.current = focusItems
+  }, [addAppNotification, authUserId, focusItems])
 
   function getAccountTypeFromRole(role) {
     if (role === 'pastor') {
@@ -2433,6 +2819,21 @@ function App() {
 
   return (
     <main className="app-shell">
+      <NotificationCenter
+        notifications={notifications}
+        unreadCount={unreadNotificationCount}
+        isOpen={notificationCenterOpen}
+        onToggle={handleToggleNotificationCenter}
+        onClose={handleCloseNotificationCenter}
+        onMarkAllRead={handleMarkAllNotificationsRead}
+        onNotificationSelect={handleNotificationSelect}
+        onRequestPermission={handleEnableBrowserNotifications}
+        notificationPermission={browserNotificationPermission}
+        welcomeVoiceEnabled={welcomeVoiceEnabled}
+        onToggleWelcomeVoice={handleToggleWelcomeVoice}
+        onReplayWelcomeVoice={() => playWelcomeVoice(true)}
+      />
+
       {canInstallApp ? (
         <button type="button" className="install-app-button" onClick={handleInstallApp}>
           <span className="install-app-button-icon" aria-hidden="true">

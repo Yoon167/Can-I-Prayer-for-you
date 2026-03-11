@@ -115,6 +115,167 @@
   font-size: 0.92rem;
 }
 
+.notification-bell-button {
+  position: fixed;
+  top: 1rem;
+  right: max(1rem, calc((100vw - min(1180px, calc(100% - 2rem))) / 2));
+  z-index: 42;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.78rem 1rem;
+  border: 1px solid rgba(118, 85, 42, 0.16);
+  border-radius: 999px;
+  color: var(--color-ink);
+  background: rgba(255, 251, 245, 0.94);
+  box-shadow: 0 18px 40px rgba(72, 48, 22, 0.12);
+  backdrop-filter: blur(14px);
+}
+
+.notification-bell-button-open {
+  color: #fff9f1;
+  border-color: transparent;
+  background: linear-gradient(135deg, #30473b, #94623d);
+}
+
+.notification-bell-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: rgba(148, 98, 61, 0.08);
+}
+
+.notification-bell-button-open .notification-bell-icon {
+  background: rgba(255, 249, 241, 0.16);
+}
+
+.notification-bell-copy {
+  font-weight: 800;
+}
+
+.notification-bell-badge {
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.35rem;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: #d65745;
+  color: #fff9f1;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.notification-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  border: 0;
+  background: rgba(22, 16, 9, 0.24);
+}
+
+.notification-panel {
+  position: fixed;
+  top: 4.9rem;
+  right: max(1rem, calc((100vw - min(1180px, calc(100% - 2rem))) / 2));
+  z-index: 40;
+  width: min(420px, calc(100vw - 2rem));
+  max-height: min(78vh, 760px);
+  display: grid;
+  gap: 1rem;
+  padding: 1.1rem;
+  overflow: auto;
+  border-radius: 28px;
+  border: 1px solid rgba(118, 85, 42, 0.15);
+  background: rgba(255, 251, 245, 0.97);
+  box-shadow: 0 24px 80px rgba(72, 48, 22, 0.16);
+  backdrop-filter: blur(18px);
+  transform: translateY(-10px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.notification-panel-open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.notification-panel-header,
+.notification-list-header,
+.notification-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.notification-panel-header h2 {
+  margin: 0;
+}
+
+.notification-panel-tools {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.notification-settings-card,
+.notification-empty-state {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.95rem 1rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(118, 85, 42, 0.12);
+}
+
+.notification-settings-card p,
+.notification-empty-state p {
+  margin: 0;
+}
+
+.notification-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.notification-item {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(118, 85, 42, 0.12);
+  border-radius: 20px;
+  text-align: left;
+  color: var(--color-ink);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.notification-item-unread {
+  border-color: rgba(48, 71, 59, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(48, 71, 59, 0.08);
+}
+
+.notification-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.8rem;
+}
+
+.notification-item-type {
+  font-weight: 800;
+  color: #94623d;
+}
+
+.notification-item strong {
+  font-size: 0.98rem;
+}
+
 .nav-button {
   display: inline-flex;
   align-items: center;
@@ -1651,8 +1812,31 @@
     max-width: none;
   }
 
+  .notification-bell-button {
+    top: 0.75rem;
+    right: 0.75rem;
+    left: 0.75rem;
+    justify-content: space-between;
+  }
+
+  .notification-panel {
+    top: 4.5rem;
+    right: 0.75rem;
+    left: 0.75rem;
+    width: auto;
+    max-height: min(72vh, 680px);
+  }
+
   .install-app-button {
     justify-content: center;
+  }
+
+  .notification-panel-header,
+  .notification-list-header,
+  .notification-settings-actions,
+  .notification-item-meta {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .nav-button {

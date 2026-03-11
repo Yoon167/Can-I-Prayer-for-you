@@ -35,7 +35,7 @@ export default defineConfig(({ command }) => {
         registerType: 'autoUpdate',
         injectRegister: false,
         includeAssets: [
-          'brand-mark.svg',
+          'app-logo.png',
           'social-preview.svg',
           'apple-touch-icon.png',
           'pwa-192x192.png',
@@ -67,9 +67,9 @@ export default defineConfig(({ command }) => {
               purpose: 'any maskable',
             },
             {
-              src: 'brand-mark.svg',
-              sizes: 'any',
-              type: 'image/svg+xml',
+              src: 'app-logo.png',
+              sizes: '1024x1024',
+              type: 'image/png',
               purpose: 'any',
             },
           ],
