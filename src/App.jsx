@@ -296,6 +296,9 @@ function App() {
   const [deferredQueueIds, setDeferredQueueIds] = useState([])
   const [followUpDrafts, setFollowUpDrafts] = useState({})
   const [testimonyDrafts, setTestimonyDrafts] = useState({})
+  const [deferredInstallPrompt, setDeferredInstallPrompt] = useState(null)
+  const [canInstallApp, setCanInstallApp] = useState(false)
+  const [installHint, setInstallHint] = useState('')
   const requestInputRef = useRef(null)
   const journalTitleRef = useRef(null)
   const swipeStartXRef = useRef(null)
@@ -440,6 +443,21 @@ function App() {
   function clearDeferredQueueId(itemId) {
     setDeferredQueueIds((currentIds) => currentIds.filter((entryId) => entryId !== itemId))
   }
+
+  const handleInstallApp = useCallback(async () => {
+    if (!deferredInstallPrompt) {
+      return
+    }
+
+    await deferredInstallPrompt.prompt()
+
+    try {
+      await deferredInstallPrompt.userChoice
+    } finally {
+      setDeferredInstallPrompt(null)
+      setCanInstallApp(false)
+    }
+  }, [deferredInstallPrompt])
 
   function deferQueueId(itemId) {
     setDeferredQueueIds((currentIds) => [...currentIds.filter((entryId) => entryId !== itemId), itemId])
@@ -608,6 +626,47 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(roleStorageKey, selectedRole)
   }, [selectedRole])
+
+  useEffect(() => {
+    const supportsMatchMedia = typeof window.matchMedia === 'function'
+    const isStandalone =
+      (supportsMatchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+      window.navigator.standalone === true
+
+    if (isStandalone) {
+      setCanInstallApp(false)
+      setDeferredInstallPrompt(null)
+      setInstallHint('')
+      return undefined
+    }
+
+    const isiOSDevice = /iphone|ipad|ipod/i.test(window.navigator.userAgent)
+
+    if (isiOSDevice) {
+      setInstallHint('On iPhone or iPad, tap Share and then Add to Home Screen.')
+    }
+
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault()
+      setDeferredInstallPrompt(event)
+      setCanInstallApp(true)
+      setInstallHint('')
+    }
+
+    const handleAppInstalled = () => {
+      setDeferredInstallPrompt(null)
+      setCanInstallApp(false)
+      setInstallHint('')
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+    }
+  }, [])
 
   useEffect(() => {
     if (authSession) {
@@ -2374,6 +2433,26 @@ function App() {
 
   return (
     <main className="app-shell">
+      {canInstallApp ? (
+        <button type="button" className="install-app-button" onClick={handleInstallApp}>
+          <span className="install-app-button-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" className="nav-icon-svg">
+              <path
+                d="M12 4v10m0 0 4-4m-4 4-4-4M5 18h14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          Install app
+        </button>
+      ) : null}
+
+      {installHint ? <p className="install-app-hint">{installHint}</p> : null}
+
       <AppNavbar currentView={currentView} onChangeView={setCurrentView} />
 
       <section className="panel role-shell">

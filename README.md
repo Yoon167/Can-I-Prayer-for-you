@@ -52,6 +52,25 @@ This repo already includes [deploy-pages.yml](.github/workflows/deploy-pages.yml
 
 You do not need `.env` or Supabase credentials for this publish path.
 
+## Install on mobile
+
+This app now builds as an installable PWA, so it can run like an app on mobile instead of only inside a normal browser tab.
+
+Android:
+
+1. Open the deployed site in Chrome.
+2. Tap the in-app `Install app` button, or use Chrome's `Add to Home screen` menu action.
+3. Launch it from your home screen after installation.
+
+iPhone or iPad:
+
+1. Open the deployed site in Safari.
+2. Tap `Share`.
+3. Tap `Add to Home Screen`.
+4. Launch it from the new home screen icon.
+
+If you want a full Play Store or App Store package later, the next step would be wrapping this PWA with Capacitor. The current change is the fastest path to getting the app installable on phones right away.
+
 ## Replace the app logo later
 
 The live app now uses [public/brand-mark.svg](public/brand-mark.svg) as the main logo in the browser tab, auth screen, and app navigation.
