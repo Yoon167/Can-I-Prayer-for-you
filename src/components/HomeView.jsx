@@ -123,7 +123,7 @@ function HomeView({
           </p>
         </article>
 
-        <VersePanel />
+        <VersePanel dailyDevotion={dailyDevotion} />
       </section>
     </>
   )

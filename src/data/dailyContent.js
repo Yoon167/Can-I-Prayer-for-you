@@ -95,9 +95,27 @@ export function getDayIndex(date = new Date(), size) {
   return dayOfYear % size
 }
 
+function getTodayDateKey(date = new Date()) {
+  return date.toISOString().slice(0, 10)
+}
+
 export function getDailyHomeContent(date = new Date()) {
+  const devotion = devotionLibrary[getDayIndex(date, devotionLibrary.length)]
+  const teaching = teachingLibrary[getDayIndex(date, teachingLibrary.length)]
+
   return {
-    devotion: devotionLibrary[getDayIndex(date, devotionLibrary.length)],
-    teaching: teachingLibrary[getDayIndex(date, teachingLibrary.length)],
+    devotion: {
+      ...devotion,
+      source: 'Curated fallback',
+      isLive: false,
+      link: null,
+    },
+    teaching: {
+      ...teaching,
+      publishDate: getTodayDateKey(date),
+      source: 'Curated fallback',
+      isLive: false,
+      link: null,
+    },
   }
 }

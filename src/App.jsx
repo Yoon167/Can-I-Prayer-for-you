@@ -84,6 +84,48 @@ import {
   normalizePrayerDeck,
 } from './utils/prayerAppUtils.js'
 
+function mapFocusItemToDeckEntry(item) {
+  return {
+    id: `deck-${item.id}`,
+    focusItemId: item.id,
+    name: item.isAnonymous ? 'Anonymous member' : item.requestedBy,
+    requestedBy: item.requestedBy,
+    isAnonymous: item.isAnonymous,
+    request: item.label,
+    category: item.category,
+    confidentiality: item.confidentiality,
+    submittedBy: item.submittedBy,
+    assignedTo: item.assignedTo,
+    flaggedAt: item.flaggedAt,
+    prayedAt: item.prayedAt,
+    ownerUserId: item.ownerUserId,
+    visibilityScope: item.visibilityScope,
+    followUpStatus: item.followUpStatus,
+    followUpMessages: item.followUpMessages,
+    prayedNotice: item.prayedNotice,
+    prayedNotifiedAt: item.prayedNotifiedAt,
+    prayedBy: item.prayedBy,
+    testimonyText: item.testimonyText,
+    testimonyShared: item.testimonyShared,
+  }
+}
+
+function getDefaultPastoralReviewDeck() {
+  return normalizePrayerDeck(
+    prayerFocus
+      .filter((item) => item.workflowStatus === 'review' && !item.answeredAt)
+      .map(mapFocusItemToDeckEntry),
+  )
+}
+
+function getDefaultPrayedDeck() {
+  return normalizePrayerDeck(
+    prayerFocus
+      .filter((item) => item.workflowStatus === 'prayed' && !item.answeredAt)
+      .map(mapFocusItemToDeckEntry),
+  )
+}
+
 function normalizeLegacyRole(role) {
   if (role === 'owner') {
     return 'prayer-core'
@@ -193,10 +235,10 @@ function App() {
     normalizePrayerDeck(loadStoredItems(prayerQueueStorageKey, prayerSwipeDeck)),
   )
   const [pastoralReviewItems, setPastoralReviewItems] = useState(() =>
-    normalizePrayerDeck(loadStoredItems(pastoralReviewStorageKey, [])),
+    normalizePrayerDeck(loadStoredItems(pastoralReviewStorageKey, getDefaultPastoralReviewDeck())),
   )
   const [prayedDeckItems, setPrayedDeckItems] = useState(() =>
-    normalizePrayerDeck(loadStoredItems(prayedDeckStorageKey, [])),
+    normalizePrayerDeck(loadStoredItems(prayedDeckStorageKey, getDefaultPrayedDeck())),
   )
   const [memberProfile, setMemberProfile] = useState(() => {
     if (typeof window === 'undefined') {
@@ -723,15 +765,19 @@ function App() {
           return
         }
 
-        setHomeContent(nextContent)
+        setHomeContent((currentContent) => ({
+          ...currentContent,
+          devotion: nextContent.devotion,
+          teaching: currentContent.teaching?.isLive ? currentContent.teaching : nextContent.teaching,
+        }))
 
         if (nextContent.devotion.isLive) {
-          setHomeContentStatus('Daily devotion is being refreshed from a live source, with teaching updated from the app library.')
+          setHomeContentStatus('Daily devotion is being refreshed from a live source.')
           return
         }
 
         setHomeContentStatus(
-          'Live home content is unavailable right now, so the app is showing curated daily content.',
+          'Live daily devotion is unavailable right now, so the app is showing curated daily content.',
         )
       })
       .catch(() => {
@@ -739,9 +785,13 @@ function App() {
           return
         }
 
-        setHomeContent(getDailyHomeContent())
+        setHomeContent((currentContent) => ({
+          ...currentContent,
+          devotion: getDailyHomeContent().devotion,
+          teaching: currentContent.teaching,
+        }))
         setHomeContentStatus(
-          'Live home content is unavailable right now, so the app is showing curated daily content.',
+          'Live daily devotion is unavailable right now, so the app is showing curated daily content.',
         )
       })
 
@@ -2466,7 +2516,7 @@ function App() {
               journalSyncStatus={effectiveJournalSyncStatus}
               journalSyncTone={effectiveJournalSyncTone}
             />
-            <VersePanel />
+            <VersePanel dailyDevotion={dailyDevotion} />
           </section>
         </>
       ) : null}
