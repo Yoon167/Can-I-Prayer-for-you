@@ -71,6 +71,36 @@ iPhone or iPad:
 
 If you want a full Play Store or App Store package later, the next step would be wrapping this PWA with Capacitor. The current change is the fastest path to getting the app installable on phones right away.
 
+## Build Android app
+
+This repo now includes a real Capacitor Android project in [android](android) with app id `io.github.yoon167.prayerapp`.
+
+To refresh the Android app with the latest web code:
+
+```bash
+npm run android:sync
+```
+
+To open the native project in Android Studio:
+
+```bash
+npm run android:open
+```
+
+From Android Studio you can then:
+
+1. connect an Android phone with USB debugging enabled, or start an emulator
+2. press `Run` to install the app directly on the device
+3. use `Build > Generate App Bundles / APKs` when you want an APK or AAB for release
+
+What you still need on this machine:
+
+1. Android Studio
+2. Android SDK installed from Android Studio
+3. a phone or emulator for testing
+
+Capacitor is already set up in this repo, so you do not need to create the Android project again.
+
 ## Replace the app logo later
 
 The live app now uses [public/brand-mark.svg](public/brand-mark.svg) as the main logo in the browser tab, auth screen, and app navigation.
