@@ -1,5 +1,15 @@
 import { useState } from 'react'
 
+const welcomeVoiceRoadmap = [
+  { id: 'english', label: 'English', status: 'Live today' },
+  { id: 'tagalog', label: 'Tagalog', status: 'Coming soon' },
+  { id: 'spanish', label: 'Spanish', status: 'Coming soon' },
+  { id: 'chinese', label: 'Chinese', status: 'Coming soon' },
+  { id: 'arabic', label: 'Arabic', status: 'Coming soon' },
+  { id: 'aramaic', label: 'Aramaic', status: 'Coming soon' },
+  { id: 'other', label: 'More voices', status: 'Coming soon' },
+]
+
 function NotificationCenter({
   notifications,
   unreadCount,
@@ -98,6 +108,9 @@ function NotificationCenter({
                   ? 'Browser notifications are not available in this browser.'
                   : 'Enable browser notifications to get popup alerts for new prayer activity.'}
             </p>
+            <p className="notification-settings-note">
+              Members also receive a live prayer alert when the intercessory team marks a request as prayed.
+            </p>
             {canRequestPermission ? (
               <button type="button" className="secondary-action" onClick={onRequestPermission}>
                 Enable alerts
@@ -112,6 +125,21 @@ function NotificationCenter({
                 ? 'A welcome voice plays once per session using the best voice your browser provides.'
                 : 'Welcome voice is muted.'}
             </p>
+            <div className="voice-language-grid" aria-label="Welcome voice languages roadmap">
+              {welcomeVoiceRoadmap.map((voiceLanguage) => (
+                <span
+                  key={voiceLanguage.id}
+                  className={
+                    voiceLanguage.status === 'Live today'
+                      ? 'voice-language-chip voice-language-chip-active'
+                      : 'voice-language-chip'
+                  }
+                >
+                  {voiceLanguage.label}
+                  <strong>{voiceLanguage.status}</strong>
+                </span>
+              ))}
+            </div>
             <div className="notification-settings-actions">
               <button type="button" className="secondary-action" onClick={onToggleWelcomeVoice}>
                 {welcomeVoiceEnabled ? 'Mute welcome voice' : 'Enable welcome voice'}

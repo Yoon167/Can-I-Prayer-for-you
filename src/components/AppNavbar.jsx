@@ -99,9 +99,9 @@ function AppNavbar({ currentView, onChangeView }) {
   const navItems = [
     { id: 'home', label: 'Home' },
     { id: 'dashboard', label: 'Prayer Hub' },
+    { id: 'praises', label: 'Praises' },
     { id: 'bible', label: 'Bible' },
     { id: 'profile', label: 'Profile' },
-    { id: 'praises', label: 'Praises' },
   ]
 
   return (

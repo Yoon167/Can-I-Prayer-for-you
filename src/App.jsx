@@ -1706,6 +1706,7 @@ function App() {
           : 'Member'
   const canManageTeaching =
     activeRole === 'prayer-core' || activeRole === 'pastor'
+  const canViewMemberDirectory = authSession?.provider === 'firebase'
   const canManageMembers =
     authSession?.provider === 'firebase' && (activeRole === 'prayer-core' || activeRole === 'pastor')
   const canRemoveRequests =
@@ -1715,6 +1716,13 @@ function App() {
   const showPastoralReview = activeRole === 'pastor' || activeRole === 'prayer-core'
   const showTeamSpaces = activeRole === 'intercessor' || activeRole === 'prayer-core'
   const showPrayerRhythm = activeRole !== 'pastor'
+  const livePrayerPreview = currentDeckCard ?? effectivePastoralReviewItems[0] ?? effectivePrayedDeckItems[0] ?? null
+  const livePrayerActiveIntercessors = Math.max(
+    memberDirectoryItems.filter((member) =>
+      member.role === 'intercessor' || member.role === 'pastor' || member.role === 'prayer-core',
+    ).length,
+    showSwipeQueue || showPastoralReview ? 1 : 0,
+  )
 
   useEffect(() => {
     if (!previousFocusItemsRef.current) {
@@ -1886,7 +1894,8 @@ function App() {
   }
 
   useEffect(() => {
-    if (!canManageMembers) {
+    if (!canViewMemberDirectory) {
+      setMemberDirectoryItems([])
       return undefined
     }
 
@@ -1897,7 +1906,9 @@ function App() {
         return
       }
 
-      setMemberDirectoryBusy(true)
+      if (canManageMembers) {
+        setMemberDirectoryBusy(true)
+      }
 
       const { items, error } = await listMemberAccounts()
 
@@ -1906,20 +1917,24 @@ function App() {
       }
 
       if (error) {
-        setMemberDirectoryStatus(getMemberDirectorySyncMessage(error))
-        setMemberDirectoryTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
-        setMemberDirectoryBusy(false)
+        if (canManageMembers) {
+          setMemberDirectoryStatus(getMemberDirectorySyncMessage(error))
+          setMemberDirectoryTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
+          setMemberDirectoryBusy(false)
+        }
         return
       }
 
       setMemberDirectoryItems(items)
-      setMemberDirectoryBusy(false)
+      if (canManageMembers) {
+        setMemberDirectoryBusy(false)
+      }
     })
 
     return () => {
       isMounted = false
     }
-  }, [canManageMembers])
+  }, [canManageMembers, canViewMemberDirectory])
 
   function removeLinkedDeckEntries(focusItemId) {
     if (sharedPrayerRequestsEnabled) {
@@ -3074,6 +3089,20 @@ function App() {
           activeRoleLabel={activeRoleConfig.label}
           dailyDevotion={dailyDevotion}
           dailyTeaching={dailyTeaching}
+          livePrayerPreview={
+            livePrayerPreview
+              ? {
+                  name: livePrayerPreview.name,
+                  request: livePrayerPreview.request,
+                  assignedTo: livePrayerPreview.assignedTo || 'Prayer team',
+                  confidentiality: livePrayerPreview.confidentiality || 'shared with the team',
+                }
+              : null
+          }
+          livePrayerQueueCount={effectivePrayerQueue.length}
+          livePrayerPastoralCount={effectivePastoralReviewItems.length}
+          livePrayerPrayedCount={effectivePrayedDeckItems.length}
+          livePrayerActiveIntercessors={livePrayerActiveIntercessors}
           homeContentStatus={homeContentStatus}
           onNavigate={setCurrentView}
         />

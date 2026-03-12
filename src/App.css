@@ -237,6 +237,45 @@
   margin: 0;
 }
 
+.notification-settings-note {
+  color: #45604b;
+  font-size: 0.92rem;
+}
+
+.voice-language-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.voice-language-chip {
+  display: inline-grid;
+  gap: 0.2rem;
+  padding: 0.62rem 0.78rem;
+  border-radius: 16px;
+  border: 1px solid rgba(228, 231, 238, 0.96);
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.voice-language-chip strong {
+  color: #b53d73;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.voice-language-chip-active {
+  border-color: rgba(93, 127, 119, 0.22);
+  background: rgba(236, 247, 241, 0.92);
+}
+
+.voice-language-chip-active strong {
+  color: #486860;
+}
+
 .notification-list {
   display: grid;
   gap: 0.7rem;
@@ -894,6 +933,68 @@
   color: var(--color-muted);
 }
 
+.home-verse-panel {
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.22), transparent 32%),
+    linear-gradient(135deg, rgba(201, 63, 122, 0.94), rgba(255, 139, 84, 0.88));
+  color: #fff9f1;
+}
+
+.home-verse-panel blockquote,
+.home-verse-panel .verse-ref,
+.home-verse-panel .eyebrow {
+  color: inherit;
+}
+
+.live-prayer-panel {
+  display: grid;
+  gap: 1rem;
+  background:
+    radial-gradient(circle at top right, rgba(255, 214, 230, 0.35), transparent 32%),
+    rgba(255, 252, 248, 0.94);
+}
+
+.live-prayer-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.live-prayer-chip {
+  min-width: 0;
+}
+
+.live-prayer-preview-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(228, 231, 238, 0.96);
+}
+
+.live-prayer-preview-card h3,
+.live-prayer-preview-card p {
+  margin: 0;
+}
+
+.live-prayer-actions {
+  margin-top: 0;
+}
+
+.home-coming-soon-panel {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.home-feature-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding-left: 1.15rem;
+  color: var(--color-muted);
+}
+
 .home-actions,
 .profile-stats-list {
   display: grid;
@@ -951,6 +1052,10 @@
 
 .profile-stat-row strong {
   color: var(--color-ink);
+}
+
+.profile-role-panel {
+  margin-top: 1rem;
 }
 
 .panel {
@@ -1837,6 +1942,10 @@
   .home-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .live-prayer-summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1929,6 +2038,10 @@
   .home-summary-grid,
   .analytics-grid,
   .profile-grid-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .live-prayer-actions {
     grid-template-columns: 1fr;
   }
 

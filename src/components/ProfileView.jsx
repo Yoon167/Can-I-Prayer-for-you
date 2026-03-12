@@ -49,11 +49,6 @@ function ProfileView({
             <p>{authSession.provider ? `Provider: ${authSession.provider}` : 'Provider not available'}</p>
           </section>
           <section className="profile-card">
-            <p className="moment-time">Access level</p>
-            <h3>{accessLevelLabel}</h3>
-            <p>{activeRoleConfig.summary}</p>
-          </section>
-          <section className="profile-card">
             <p className="moment-time">Member identity</p>
             <h3>{memberIdentity}</h3>
             <p>
@@ -61,6 +56,11 @@ function ProfileView({
                 ? `Saved member profile for ${memberProfile.fullName}.`
                 : 'Add your member details so prayer requests can show your name when you do not post anonymously.'}
             </p>
+          </section>
+          <section className="profile-card">
+            <p className="moment-time">Prayer snapshot</p>
+            <h3>{activeCount} active requests</h3>
+            <p>{answeredCount} answered prayers and {journalCount} journal notes in your current rhythm.</p>
           </section>
         </div>
       </article>
@@ -329,6 +329,20 @@ function ProfileView({
           onUpdateRole={handleUpdateMemberRole}
         />
       ) : null}
+
+      <article className="panel profile-role-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Workspace role</p>
+            <h2>{accessLevelLabel}</h2>
+          </div>
+          <span className="panel-tag">Last section</span>
+        </div>
+        <p className="role-summary">{activeRoleConfig.summary}</p>
+        <p className="form-helper profile-form-helper">
+          Your workspace role now lives at the bottom of the profile so personal details stay first and leadership access comes last.
+        </p>
+      </article>
     </section>
   )
 }
