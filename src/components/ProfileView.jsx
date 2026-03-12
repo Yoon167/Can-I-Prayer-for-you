@@ -38,9 +38,6 @@ function ProfileView({
             <p className="eyebrow">Profile</p>
             <h2>Your access and activity</h2>
           </div>
-          <button type="button" className="ghost-action" onClick={handleSignOut} disabled={authBusy}>
-            Sign out
-          </button>
         </div>
 
         <div className="profile-grid-cards">
@@ -317,6 +314,21 @@ function ProfileView({
           </form>
         </article>
       ) : null}
+
+      <article className="panel panel-wide profile-signout-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Session</p>
+            <h2>Sign out of this account</h2>
+          </div>
+        </div>
+        <p className="form-helper profile-form-helper">
+          Use sign out when you want to switch accounts before testing roles, permissions, or release behavior.
+        </p>
+        <button type="button" className="ghost-action profile-signout-action" onClick={handleSignOut} disabled={authBusy}>
+          Sign out
+        </button>
+      </article>
 
       {canManageMembers ? (
         <MemberAccessPanel

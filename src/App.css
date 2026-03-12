@@ -264,6 +264,11 @@
   font-weight: 700;
 }
 
+.voice-language-button {
+  cursor: pointer;
+  text-align: left;
+}
+
 .voice-language-chip strong {
   color: #b53d73;
   font-size: 0.72rem;
@@ -1645,10 +1650,30 @@
   justify-self: start;
 }
 
+.profile-signout-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.profile-signout-action {
+  justify-self: start;
+}
+
 .member-access-list,
 .bible-prayer-prompts {
   display: grid;
   gap: 1rem;
+}
+
+.member-access-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.member-access-collapsed-note {
+  margin: 0;
+  color: var(--color-muted);
 }
 
 .member-access-card,

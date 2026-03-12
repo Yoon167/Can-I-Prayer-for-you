@@ -123,6 +123,7 @@ function AppNavbar({ currentView, onChangeView, unreadNotificationCount }) {
     { id: 'praises', label: 'Praises' },
     { id: 'dashboard', label: 'Prayer Hub' },
     { id: 'bible', label: 'Bible' },
+    { id: 'profile', label: 'Profile' },
     { id: 'notification', label: 'Alerts' },
   ]
 

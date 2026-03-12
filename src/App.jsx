@@ -192,9 +192,70 @@ const defaultMemberProfile = {
 
 const notificationStorageKey = 'prayer-app-notifications'
 const welcomeVoiceEnabledStorageKey = 'prayer-app-welcome-voice-enabled'
+const welcomeVoiceLanguageStorageKey = 'prayer-app-welcome-voice-language'
 const welcomeVoiceSessionKey = 'prayer-app-welcome-voice-played'
-const welcomeVoiceMessage =
-  'Welcome to Pray for You. Your prayer community is ready for new requests, praise reports, and prayer updates.'
+const welcomeVoiceOptions = [
+  {
+    id: 'english',
+    label: 'English',
+    status: 'Live now',
+    speechText:
+      'Welcome to Pray for You. Your prayer community is ready for new requests, praise reports, and prayer updates.',
+    speechLang: 'en-US',
+    voicePrefixes: ['en-us', 'en'],
+    preferredVoiceNames: ['Microsoft Aria Online (Natural) - English (United States)', 'Microsoft Aria - English (United States)', 'Google US English', 'Samantha'],
+  },
+  {
+    id: 'tagalog',
+    label: 'Tagalog',
+    status: 'Live now',
+    speechText:
+      'Maligayang pagdating sa Pray for You. Handa na ang inyong komunidad sa panalangin para sa mga bagong hiling, papuri, at mga update sa panalangin.',
+    speechLang: 'fil-PH',
+    voicePrefixes: ['fil', 'tl', 'tag'],
+    preferredVoiceNames: ['Microsoft Blessica Online (Natural) - Filipino (Philippines)', 'Microsoft Blessica - Filipino (Philippines)'],
+  },
+  {
+    id: 'spanish',
+    label: 'Spanish',
+    status: 'Live now',
+    speechText:
+      'Bienvenido a Pray for You. Tu comunidad de oracion esta lista para nuevas peticiones, reportes de alabanza y actualizaciones de oracion.',
+    speechLang: 'es-ES',
+    voicePrefixes: ['es-es', 'es-us', 'es-mx', 'es'],
+    preferredVoiceNames: ['Microsoft Elvira Online (Natural) - Spanish (Spain)', 'Microsoft Alvaro Online (Natural) - Spanish (Spain)', 'Google espanol'],
+  },
+  {
+    id: 'arabic',
+    label: 'Arabic',
+    status: 'Live now',
+    speechText:
+      'Marhaban bik fi Pray for You. Mujtama al-salah ladayh istiidad litalabat jadida wa taqarir al-tasbih wa tahdithat al-salah.',
+    speechLang: 'ar-SA',
+    voicePrefixes: ['ar-sa', 'ar-eg', 'ar'],
+    preferredVoiceNames: ['Microsoft Hamed Online (Natural) - Arabic (Saudi Arabia)', 'Microsoft Zariyah Online (Natural) - Arabic (Saudi Arabia)'],
+  },
+  {
+    id: 'aramaic',
+    label: 'Aramaic',
+    status: 'Live now',
+    speechText:
+      'Shlama w brikha l Pray for You. Qehilta dslotha metuyva lebautha hadatha, tushbohta, w hudath dslotha.',
+    speechLang: 'en-US',
+    voicePrefixes: ['arc', 'syr', 'en'],
+    preferredVoiceNames: ['Microsoft Aria Online (Natural) - English (United States)', 'Microsoft Aria - English (United States)', 'Google US English'],
+  },
+  {
+    id: 'chinese',
+    label: 'Chinese',
+    status: 'Live now',
+    speechText:
+      'Huan ying lai dao Pray for You. Ni de dao gao she qu yi jing zhun bei hao xin de qi qiu, gan en fen xiang he dao gao geng xin.',
+    speechLang: 'zh-CN',
+    voicePrefixes: ['zh-cn', 'zh-tw', 'zh-hk', 'cmn', 'zh'],
+    preferredVoiceNames: ['Microsoft Xiaoxiao Online (Natural) - Chinese (Mainland)', 'Google mandarin'],
+  },
+]
 const demoFocusItemIds = new Set(prayerFocus.map((item) => item.id))
 const demoJournalEntryIds = new Set(journalEntries.map((entry) => entry.id))
 const notificationTypeLabels = {
@@ -263,22 +324,23 @@ function loadStoredNotifications() {
   }
 }
 
-function selectPreferredVoice(voices) {
+function getWelcomeVoiceOption(languageId) {
+  return welcomeVoiceOptions.find((option) => option.id === languageId) ?? welcomeVoiceOptions[0]
+}
+
+function selectPreferredVoice(voices, option) {
   if (!Array.isArray(voices) || voices.length === 0) {
     return null
   }
 
-  const preferredVoiceNames = [
-    'Microsoft Aria Online (Natural) - English (United States)',
-    'Microsoft Aria - English (United States)',
-    'Google US English',
-    'Samantha',
-  ]
+  const preferredVoiceNames = option?.preferredVoiceNames ?? []
+  const voicePrefixes = option?.voicePrefixes ?? ['en']
 
   return (
     voices.find((voice) => preferredVoiceNames.includes(voice.name)) ??
-    voices.find((voice) => voice.lang?.toLowerCase?.().startsWith('en-us')) ??
-    voices.find((voice) => voice.lang?.toLowerCase?.().startsWith('en')) ??
+    voices.find((voice) =>
+      voicePrefixes.some((prefix) => voice.lang?.toLowerCase?.().startsWith(prefix)),
+    ) ??
     voices[0]
   )
 }
@@ -425,6 +487,13 @@ function App() {
     }
 
     return window.localStorage.getItem(welcomeVoiceEnabledStorageKey) !== 'false'
+  })
+  const [welcomeVoiceLanguage, setWelcomeVoiceLanguage] = useState(() => {
+    if (typeof window === 'undefined') {
+      return 'english'
+    }
+
+    return getWelcomeVoiceOption(window.localStorage.getItem(welcomeVoiceLanguageStorageKey)).id
   })
   const requestInputRef = useRef(null)
   const journalTitleRef = useRef(null)
@@ -651,6 +720,8 @@ function App() {
         return false
       }
 
+      const selectedVoiceOption = getWelcomeVoiceOption(welcomeVoiceLanguage)
+
       try {
         if (canUseNativeTextToSpeech()) {
           try {
@@ -660,8 +731,8 @@ function App() {
           }
 
           await TextToSpeech.speak({
-            text: welcomeVoiceMessage,
-            lang: 'en-US',
+            text: selectedVoiceOption.speechText,
+            lang: selectedVoiceOption.speechLang,
             rate: 1,
             pitch: 1,
             volume: 1,
@@ -674,14 +745,17 @@ function App() {
           return false
         }
 
-        const utterance = new SpeechSynthesisUtterance(welcomeVoiceMessage)
-        const preferredVoice = selectPreferredVoice(window.speechSynthesis.getVoices())
+        const utterance = new SpeechSynthesisUtterance(selectedVoiceOption.speechText)
+        const preferredVoice = selectPreferredVoice(
+          window.speechSynthesis.getVoices(),
+          selectedVoiceOption,
+        )
 
         if (preferredVoice) {
           utterance.voice = preferredVoice
-          utterance.lang = preferredVoice.lang || 'en-US'
+          utterance.lang = preferredVoice.lang || selectedVoiceOption.speechLang
         } else {
-          utterance.lang = 'en-US'
+          utterance.lang = selectedVoiceOption.speechLang
         }
 
         utterance.rate = 1.01
@@ -695,7 +769,7 @@ function App() {
         return false
       }
     },
-    [welcomeVoiceEnabled],
+    [welcomeVoiceEnabled, welcomeVoiceLanguage],
   )
 
   const handleToggleWelcomeVoice = useCallback(() => {
@@ -716,6 +790,23 @@ function App() {
       return nextValue
     })
   }, [addAppNotification])
+
+  const handleChangeWelcomeVoiceLanguage = useCallback(
+    (nextLanguageId) => {
+      const nextVoiceOption = getWelcomeVoiceOption(nextLanguageId)
+
+      setWelcomeVoiceLanguage(nextVoiceOption.id)
+      addAppNotification({
+        type: 'system',
+        title: 'Welcome voice language changed',
+        detail: `${nextVoiceOption.label} is now selected for the spoken welcome.`,
+        createdAt: new Date().toISOString(),
+        dedupeKey: `welcome-voice-language:${nextVoiceOption.id}`,
+        view: 'notification',
+      })
+    },
+    [addAppNotification],
+  )
 
   const handleEnableBrowserNotifications = useCallback(async () => {
     if (typeof window === 'undefined' || typeof window.Notification === 'undefined') {
@@ -920,6 +1011,14 @@ function App() {
       welcomeVoiceEnabled ? 'true' : 'false',
     )
   }, [welcomeVoiceEnabled])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(welcomeVoiceLanguageStorageKey, welcomeVoiceLanguage)
+  }, [welcomeVoiceLanguage])
 
   useEffect(() => {
     window.localStorage.setItem(roleStorageKey, selectedRole)
@@ -3178,7 +3277,10 @@ function App() {
           onRequestPermission={handleEnableBrowserNotifications}
           notificationPermission={browserNotificationPermission}
           welcomeVoiceEnabled={welcomeVoiceEnabled}
+          welcomeVoiceLanguage={welcomeVoiceLanguage}
+          welcomeVoiceOptions={welcomeVoiceOptions}
           onToggleWelcomeVoice={handleToggleWelcomeVoice}
+          onChangeWelcomeVoiceLanguage={handleChangeWelcomeVoiceLanguage}
           onReplayWelcomeVoice={() => {
             void playWelcomeVoice(true)
           }}

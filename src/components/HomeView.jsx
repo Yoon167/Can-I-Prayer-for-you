@@ -1,12 +1,12 @@
 import VersePanel from './VersePanel.jsx'
 
 const welcomeLanguageRoadmap = [
-  { id: 'english', label: 'English', status: 'Live today' },
-  { id: 'tagalog', label: 'Tagalog', status: 'Coming soon' },
-  { id: 'spanish', label: 'Spanish', status: 'Coming soon' },
-  { id: 'chinese', label: 'Chinese', status: 'Coming soon' },
-  { id: 'arabic', label: 'Arabic', status: 'Coming soon' },
-  { id: 'aramaic', label: 'Aramaic', status: 'Coming soon' },
+  { id: 'english', label: 'English', status: 'Live now' },
+  { id: 'tagalog', label: 'Tagalog', status: 'Live now' },
+  { id: 'spanish', label: 'Spanish', status: 'Live now' },
+  { id: 'chinese', label: 'Chinese', status: 'Live now' },
+  { id: 'arabic', label: 'Arabic', status: 'Live now' },
+  { id: 'aramaic', label: 'Aramaic', status: 'Live now' },
 ]
 
 function HomeView({
@@ -196,19 +196,19 @@ function HomeView({
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Welcome languages</p>
-              <h2>More languages for the spoken welcome</h2>
+              <h2>Choose the spoken welcome language</h2>
             </div>
-            <span className="panel-tag">Roadmap</span>
+            <span className="panel-tag">Available now</span>
           </div>
           <p>
-            English is live now. Tagalog, Spanish, Chinese, Arabic, Aramaic, and more are marked as coming soon so members can see what is on the way.
+            English, Tagalog, Spanish, Chinese, Arabic, and Aramaic are now available for the welcome voice in the alerts screen.
           </p>
           <div className="voice-language-grid">
             {welcomeLanguageRoadmap.map((language) => (
               <span
                 key={language.id}
                 className={
-                  language.status === 'Live today'
+                  language.status === 'Live now'
                     ? 'voice-language-chip voice-language-chip-active'
                     : 'voice-language-chip'
                 }
