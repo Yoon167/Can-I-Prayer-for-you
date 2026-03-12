@@ -96,3 +96,14 @@ prayer-core
 New signups should stay `member` by default. Only pastors or prayer-core should assign elevated roles.
 
 If you want to create or update users from the repo later, you can still use the provisioning script with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` locally.
+
+## 7. Repair pastor access for existing users
+
+If a pastor or prayer-core user still cannot see preaching, analytics, prayer review, or today snapshot data, the usual cause is a stale `public.member_accounts.role` row left behind from an earlier `member` signup.
+
+Run these in Supabase SQL Editor in order:
+
+1. Run [supabase/bootstrap.sql](supabase/bootstrap.sql) again so the latest trigger and role sync logic are installed.
+2. Run [supabase/repair_member_account_roles.sql](supabase/repair_member_account_roles.sql) to backfill elevated roles from `auth.users` into `public.member_accounts`.
+
+After that, sign out and sign back in with the promoted account.

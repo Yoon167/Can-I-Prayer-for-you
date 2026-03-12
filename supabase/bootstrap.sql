@@ -103,7 +103,13 @@ language plpgsql
 as $$
 declare
   actor_role text := public.prayer_app_current_role();
+  request_role text := coalesce(auth.jwt() ->> 'role', current_setting('request.jwt.claim.role', true), '');
 begin
+  if current_user = 'postgres' or request_role = 'service_role' then
+    new.updated_at = timezone('utc', now());
+    return new;
+  end if;
+
   if auth.uid() is null then
     raise exception 'Authentication is required to manage member accounts.';
   end if;
@@ -137,6 +143,25 @@ create trigger member_accounts_guard
 before insert or update on public.member_accounts
 for each row
 execute function public.enforce_member_account_changes();
+
+insert into public.member_accounts (user_id, email, role)
+select
+  auth_users.id,
+  coalesce(auth_users.email, ''),
+  case coalesce(auth_users.raw_app_meta_data ->> 'role', auth_users.raw_user_meta_data ->> 'role', 'member')
+    when 'owner' then 'prayer-core'
+    when 'pastor' then 'pastor'
+    when 'intercessor' then 'intercessor'
+    when 'prayer-core' then 'prayer-core'
+    else 'member'
+  end
+from auth.users as auth_users
+on conflict (user_id) do update
+set email = excluded.email,
+    role = case
+      when public.member_accounts.role = 'owner' then 'prayer-core'
+      else public.member_accounts.role
+    end;
 
 drop policy if exists "Users can read their own member account" on public.member_accounts;
 drop policy if exists "Privileged users can read all member accounts" on public.member_accounts;

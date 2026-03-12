@@ -2,6 +2,14 @@ import { createClient } from '@supabase/supabase-js'
 
 const validRoles = new Set(['intercessor', 'pastor', 'prayer-core'])
 
+function normalizeRole(role) {
+  if (role === 'owner') {
+    return 'prayer-core'
+  }
+
+  return validRoles.has(role) ? role : 'member'
+}
+
 function parseArgs(argv) {
   const args = {}
 
@@ -38,7 +46,9 @@ Required environment variables:
 Allowed roles:
   intercessor
   pastor
-  prayer-core`)
+  prayer-core
+
+This command also syncs public.member_accounts so promoted users can see pastor and analytics data immediately.`)
 }
 
 async function findUserByEmail(supabase, email) {
@@ -68,6 +78,26 @@ async function findUserByEmail(supabase, email) {
   }
 
   return null
+}
+
+async function syncMemberAccountRole(supabase, { userId, email, role }) {
+  const normalizedRole = normalizeRole(role)
+  const { error } = await supabase.from('member_accounts').upsert(
+    {
+      user_id: userId,
+      email,
+      role: normalizedRole,
+    },
+    {
+      onConflict: 'user_id',
+    },
+  )
+
+  if (error) {
+    throw new Error(
+      `Failed to sync member_accounts for ${email}: ${error.message}. Rerun supabase/bootstrap.sql in Supabase, then try again.`,
+    )
+  }
 }
 
 async function main() {
@@ -123,7 +153,13 @@ async function main() {
       throw new Error(`Failed to update existing user: ${error.message}`)
     }
 
-    console.log(`Updated user ${email} with role ${role}.`)
+    await syncMemberAccountRole(supabase, {
+      userId: existingUser.id,
+      email,
+      role,
+    })
+
+    console.log(`Updated user ${email} with role ${role} and synced member_accounts.`)
     return
   }
 
@@ -143,7 +179,13 @@ async function main() {
     throw new Error(`Failed to create user: ${error.message}`)
   }
 
-  console.log(`Created user ${data.user.email} with role ${role}.`)
+  await syncMemberAccountRole(supabase, {
+    userId: data.user.id,
+    email,
+    role,
+  })
+
+  console.log(`Created user ${data.user.email} with role ${role} and synced member_accounts.`)
 }
 
 main().catch((error) => {
