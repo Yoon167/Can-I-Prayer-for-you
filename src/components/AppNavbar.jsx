@@ -1,5 +1,3 @@
-import AppLogo from './AppLogo.jsx'
-
 function NavIcon({ id, active }) {
   const strokeWidth = active ? 2.2 : 1.8
 
@@ -121,18 +119,14 @@ function AppNavbar({ currentView, onChangeView, unreadNotificationCount }) {
   const navItems = [
     { id: 'home', label: 'Home' },
     { id: 'praises', label: 'Praises' },
-    { id: 'dashboard', label: 'Prayer Hub' },
     { id: 'bible', label: 'Bible' },
+    { id: 'dashboard', label: 'Prayer Hub' },
     { id: 'profile', label: 'Profile' },
     { id: 'notification', label: 'Alerts' },
   ]
 
   return (
     <nav className="app-navbar" aria-label="Primary navigation">
-      <div className="app-navbar-brand">
-        <AppLogo compact />
-      </div>
-
       <div className="app-navbar-links">
         {navItems.map((item) => (
           <button

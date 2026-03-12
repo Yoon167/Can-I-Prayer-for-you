@@ -9,7 +9,7 @@
 .app-navbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 1rem;
   position: fixed;
   top: 0.85rem;
@@ -23,17 +23,6 @@
   border: 1px solid rgba(245, 228, 204, 0.72);
   box-shadow: 0 20px 56px rgba(17, 24, 39, 0.12);
   backdrop-filter: blur(18px);
-}
-
-.app-navbar-brand h2 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  color: var(--color-ink);
-}
-
-.app-navbar-brand .eyebrow {
-  margin-bottom: 0.35rem;
 }
 
 .app-logo {
@@ -67,9 +56,11 @@
 }
 
 .app-navbar-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0.3rem;
+  width: min(100%, 760px);
 }
 
 .install-app-button {
@@ -367,8 +358,11 @@
 .nav-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.62rem 0.78rem;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.58rem 0.45rem;
+  min-width: 0;
+  width: 100%;
   border: 1px solid transparent;
   border-radius: 999px;
   color: var(--color-muted);
@@ -391,8 +385,8 @@
 .nav-icon-wrap {
   display: inline-grid;
   place-items: center;
-  width: 1.9rem;
-  height: 1.9rem;
+  width: 1.7rem;
+  height: 1.7rem;
   border-radius: 999px;
   background: rgba(201, 63, 122, 0.08);
 }
@@ -402,12 +396,14 @@
 }
 
 .nav-icon-svg {
-  width: 1.2rem;
-  height: 1.2rem;
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .nav-label {
   line-height: 1;
+  white-space: nowrap;
+  font-size: 0.82rem;
 }
 
 .nav-badge {
@@ -1929,13 +1925,12 @@
   .app-navbar {
     top: 0.75rem;
     width: calc(100% - 1.5rem);
-    flex-direction: row;
-    align-items: center;
+    padding-inline: 0.7rem;
   }
 
   .app-navbar-links {
     width: 100%;
-    justify-content: center;
+    max-width: none;
   }
 
   .role-shell {
@@ -2016,12 +2011,9 @@
     top: auto;
     bottom: 0.75rem;
     z-index: 30;
-    padding: 0.75rem;
-    border-radius: 28px;
-  }
-
-  .app-navbar-brand {
-    display: none;
+    width: calc(100% - 1rem);
+    padding: 0.45rem;
+    border-radius: 24px;
   }
 
   .auth-logo {
@@ -2034,9 +2026,9 @@
 
   .app-navbar-links {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     width: 100%;
-    gap: 0.35rem;
+    gap: 0.14rem;
   }
 
   .install-app-button,
@@ -2115,18 +2107,31 @@
   .nav-button {
     justify-content: center;
     flex-direction: column;
-    gap: 0.28rem;
-    padding: 0.52rem 0.2rem;
-    border-radius: 18px;
+    gap: 0.18rem;
+    padding: 0.38rem 0.02rem;
+    border-radius: 14px;
   }
 
   .nav-icon-wrap {
-    width: 2rem;
-    height: 2rem;
+    width: 1.6rem;
+    height: 1.6rem;
   }
 
   .nav-label {
-    font-size: 0.68rem;
+    font-size: 0.54rem;
+    letter-spacing: 0.01em;
+  }
+
+  .nav-icon-svg {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .nav-badge {
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.2rem;
+    font-size: 0.56rem;
   }
 
   .auth-actions {
