@@ -2,7 +2,6 @@ import MemberAccessPanel from './MemberAccessPanel.jsx'
 
 function ProfileView({
   authSession,
-  activeRoleConfig,
   activeCount,
   answeredCount,
   journalCount,
@@ -10,6 +9,7 @@ function ProfileView({
   memberProfileForm,
   memberProfileStatus,
   authBusy,
+  handleSignOut,
   handleMemberProfileChange,
   handleMemberAvatarChange,
   handleSaveMemberProfile,
@@ -29,7 +29,6 @@ function ProfileView({
   roleOptions,
 }) {
   const memberIdentity = memberProfile.displayName || memberProfile.fullName || 'Not saved yet'
-  const accessLevelLabel = activeRoleConfig.label
 
   return (
     <section className="content-grid profile-grid">
@@ -39,7 +38,9 @@ function ProfileView({
             <p className="eyebrow">Profile</p>
             <h2>Your access and activity</h2>
           </div>
-          <span className="panel-tag">{activeRoleConfig.label}</span>
+          <button type="button" className="ghost-action" onClick={handleSignOut} disabled={authBusy}>
+            Sign out
+          </button>
         </div>
 
         <div className="profile-grid-cards">
@@ -329,20 +330,6 @@ function ProfileView({
           onUpdateRole={handleUpdateMemberRole}
         />
       ) : null}
-
-      <article className="panel profile-role-panel">
-        <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Workspace role</p>
-            <h2>{accessLevelLabel}</h2>
-          </div>
-          <span className="panel-tag">Last section</span>
-        </div>
-        <p className="role-summary">{activeRoleConfig.summary}</p>
-        <p className="form-helper profile-form-helper">
-          Your workspace role now lives at the bottom of the profile so personal details stay first and leadership access comes last.
-        </p>
-      </article>
     </section>
   )
 }

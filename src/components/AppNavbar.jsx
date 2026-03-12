@@ -74,6 +74,28 @@ function NavIcon({ id, active }) {
     )
   }
 
+  if (id === 'notification') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" className="nav-icon-svg">
+        <path
+          d="M12 4.5a4 4 0 0 0-4 4v2.2c0 1.4-.5 2.8-1.4 3.9L5.3 16h13.4l-1.3-1.4a5.8 5.8 0 0 1-1.4-3.9V8.5a4 4 0 0 0-4-4Z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M9.8 18a2.4 2.4 0 0 0 4.4 0"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className="nav-icon-svg">
       <path
@@ -95,13 +117,13 @@ function NavIcon({ id, active }) {
   )
 }
 
-function AppNavbar({ currentView, onChangeView }) {
+function AppNavbar({ currentView, onChangeView, unreadNotificationCount }) {
   const navItems = [
     { id: 'home', label: 'Home' },
-    { id: 'dashboard', label: 'Prayer Hub' },
     { id: 'praises', label: 'Praises' },
+    { id: 'dashboard', label: 'Prayer Hub' },
     { id: 'bible', label: 'Bible' },
-    { id: 'profile', label: 'Profile' },
+    { id: 'notification', label: 'Alerts' },
   ]
 
   return (
@@ -123,6 +145,9 @@ function AppNavbar({ currentView, onChangeView }) {
               <NavIcon id={item.id} active={currentView === item.id} />
             </span>
             <span className="nav-label">{item.label}</span>
+            {item.id === 'notification' && unreadNotificationCount > 0 ? (
+              <span className="nav-badge">{unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}</span>
+            ) : null}
           </button>
         ))}
       </div>

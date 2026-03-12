@@ -13,9 +13,6 @@ const welcomeVoiceRoadmap = [
 function NotificationCenter({
   notifications,
   unreadCount,
-  isOpen,
-  onToggle,
-  onClose,
   onMarkAllRead,
   onNotificationSelect,
   onRequestPermission,
@@ -49,53 +46,13 @@ function NotificationCenter({
   }
 
   return (
-    <>
-      <button
-        type="button"
-        className={isOpen ? 'notification-bell-button notification-bell-button-open' : 'notification-bell-button'}
-        onClick={onToggle}
-        aria-label={unreadCount > 0 ? `Open notifications (${unreadCount} unread)` : 'Open notifications'}
-        aria-expanded={isOpen}
-        aria-controls="notification-center-panel"
-      >
-        <span className="notification-bell-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" className="nav-icon-svg">
-            <path
-              d="M12 4.5a4 4 0 0 0-4 4v2.2c0 1.4-.5 2.8-1.4 3.9L5.3 16h13.4l-1.3-1.4a5.8 5.8 0 0 1-1.4-3.9V8.5a4 4 0 0 0-4-4Z"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M9.8 18a2.4 2.4 0 0 0 4.4 0"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-            />
-          </svg>
-        </span>
-        <span className="notification-bell-copy">Alerts</span>
-        {unreadCount > 0 ? <span className="notification-bell-badge">{unreadCount > 99 ? '99+' : unreadCount}</span> : null}
-      </button>
-
-      {isOpen ? <button type="button" className="notification-overlay" aria-label="Close notifications" onClick={onClose} /> : null}
-
-      <aside
-        id="notification-center-panel"
-        className={isOpen ? 'notification-panel notification-panel-open' : 'notification-panel'}
-        aria-label="Notifications"
-      >
+    <section className="panel panel-wide notification-page" aria-label="Notifications">
         <div className="notification-panel-header">
           <div>
             <p className="eyebrow">Prayer updates</p>
             <h2>Notifications</h2>
           </div>
-          <button type="button" className="ghost-action" onClick={onClose}>
-            Close
-          </button>
+          <span className="panel-tag">{unreadCount} unread</span>
         </div>
 
         <div className="notification-panel-tools">
@@ -209,8 +166,7 @@ function NotificationCenter({
             <p>New prayer requests, follow-up updates, and answered reports will appear here.</p>
           </div>
         )}
-      </aside>
-    </>
+    </section>
   )
 }
 
