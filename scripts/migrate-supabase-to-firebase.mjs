@@ -213,30 +213,28 @@ async function migrateAuthUsers({ supabase, firebaseAuth, defaultPassword, membe
     const role = normalizeRole(
       user.app_metadata?.role ?? user.user_metadata?.role ?? memberAccount?.role ?? 'member',
     )
+    const userPayload = {
+      email,
+      password: defaultPassword,
+      emailVerified: Boolean(user.email_confirmed_at),
+      disabled: false,
+    }
+
+    if (typeof displayName === 'string' && displayName.trim()) {
+      userPayload.displayName = displayName.trim()
+    }
 
     let firebaseUser
 
     try {
       firebaseUser = await firebaseAuth.getUserByEmail(email)
-      firebaseUser = await firebaseAuth.updateUser(firebaseUser.uid, {
-        email,
-        password: defaultPassword,
-        displayName,
-        emailVerified: Boolean(user.email_confirmed_at),
-        disabled: false,
-      })
+      firebaseUser = await firebaseAuth.updateUser(firebaseUser.uid, userPayload)
     } catch (error) {
       if (error.code !== 'auth/user-not-found') {
         throw error
       }
 
-      firebaseUser = await firebaseAuth.createUser({
-        email,
-        password: defaultPassword,
-        displayName,
-        emailVerified: Boolean(user.email_confirmed_at),
-        disabled: false,
-      })
+      firebaseUser = await firebaseAuth.createUser(userPayload)
     }
 
     uidMap.set(user.id, firebaseUser.uid)
