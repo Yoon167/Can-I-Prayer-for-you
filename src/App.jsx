@@ -295,6 +295,10 @@ function canRunPublishedUpdateChecks() {
   return !Capacitor.isNativePlatform()
 }
 
+function getSupabaseSignInRequiredMessage(resourceLabel) {
+  return `Sign in to your Supabase-backed account before saving ${resourceLabel}.`
+}
+
 function App() {
   const currentBuildId = import.meta.env.VITE_APP_BUILD_ID || 'dev-local'
   const [authReady, setAuthReady] = useState(() => !isSupabaseConfigured)
@@ -1222,6 +1226,7 @@ function App() {
     isPrayerRequestSyncConfigured && authSession?.provider === 'supabase'
   const sharedJournalEnabled = isJournalSyncConfigured && authSession?.provider === 'supabase'
   const sharedTeachingEnabled = isTeachingSyncConfigured && authSession?.provider === 'supabase'
+  const supabaseWriteRequiresSignIn = isSupabaseConfigured && authSession?.provider !== 'supabase'
 
   const migrateLocalPrayerRequestsToSupabase = useEffectEvent(async (remoteItems) => {
     if (prayerRequestMigrationAttemptedRef.current || remoteItems.length > 0) {
@@ -1945,6 +1950,13 @@ function App() {
       return
     }
 
+    if (supabaseWriteRequiresSignIn) {
+      setAuthNotice('Sign in first so new prayer requests are saved directly to Supabase and synced across devices.')
+      setRequestSyncStatus(getSupabaseSignInRequiredMessage('this prayer request'))
+      setRequestSyncTone('error')
+      return
+    }
+
     const focusId = createId('focus')
     const requesterName = requestIsAnonymous ? 'Anonymous member' : memberDisplayName
     const isPastoralOnly = requestVisibilityScope === 'pastoral'
@@ -1991,7 +2003,7 @@ function App() {
       }
 
       setFocusItems((currentItems) => [item, ...currentItems.filter((entry) => entry.id !== item.id)])
-      setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
+      setRequestSyncStatus('Prayer request saved to Supabase and syncing across your signed-in devices.')
       setRequestSyncTone('neutral')
     } else {
       setFocusItems((currentItems) => [nextFocusItem, ...currentItems])
@@ -2129,6 +2141,8 @@ function App() {
     event.preventDefault()
 
     if (!canManageTeaching) {
+      setTeachingStatus('Only pastor or prayer-core accounts can save daily preaching to Supabase.')
+      setTeachingTone('error')
       return
     }
 
@@ -2156,7 +2170,9 @@ function App() {
 
     if (!sharedTeachingEnabled) {
       setTeachingStatus(
-        'Configure Supabase and run the daily_teachings SQL script to manage teachings from the app.',
+        isSupabaseConfigured
+          ? 'Sign in as a pastor or prayer-core account to save daily preaching into Supabase.'
+          : 'Configure Supabase and run the daily_teachings SQL script to manage teachings from the app.',
       )
       setTeachingTone('error')
       return
@@ -2465,6 +2481,13 @@ function App() {
       return
     }
 
+    if (supabaseWriteRequiresSignIn) {
+      setAuthNotice('Sign in first so new journal entries are saved directly to Supabase and restored after restart.')
+      setJournalSyncStatus(getSupabaseSignInRequiredMessage('this journal entry'))
+      setJournalSyncTone('error')
+      return
+    }
+
     const nextEntry = {
       id: createId('journal'),
       title: trimmedTitle,
@@ -2488,7 +2511,7 @@ function App() {
       }
 
       setJournalItems((currentEntries) => [item, ...currentEntries.filter((entry) => entry.id !== item.id)])
-      setJournalSyncStatus('Your journal is syncing across signed-in devices.')
+      setJournalSyncStatus('Journal entry saved to Supabase and syncing across your signed-in devices.')
       setJournalSyncTone('neutral')
     } else {
       setJournalItems((currentEntries) => [nextEntry, ...currentEntries])
