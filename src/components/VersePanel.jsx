@@ -3,7 +3,7 @@ function VersePanel({ dailyDevotion, className = '' }) {
   const verseReference = dailyDevotion?.scripture ?? 'Philippians 4:6'
 
   return (
-    <article className={`panel accent-panel ${className}`.trim()}>
+    <article className={`panel ${className}`.trim()}>
       <p className="eyebrow">Verse for today</p>
       <blockquote>{verseText}</blockquote>
       <p className="verse-ref">{verseReference}</p>

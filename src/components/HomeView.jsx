@@ -1,4 +1,3 @@
-import HeroPanel from './HeroPanel.jsx'
 import VersePanel from './VersePanel.jsx'
 
 const welcomeLanguageRoadmap = [
@@ -14,13 +13,9 @@ function HomeView({
   memberName,
   accountType,
   answeredCount,
-  completedCount,
   activeCount,
-  requestInputRef,
-  journalTitleRef,
   prayedDeckCount,
   pastoralReviewCount,
-  activeRoleLabel,
   dailyDevotion,
   dailyTeaching,
   livePrayerPreview,
@@ -33,23 +28,15 @@ function HomeView({
 }) {
   return (
     <>
-      <HeroPanel
-        answeredCount={answeredCount}
-        completedCount={completedCount}
-        activeCount={activeCount}
-        requestInputRef={requestInputRef}
-        journalTitleRef={journalTitleRef}
-      />
-
       <section className="content-grid">
-        <VersePanel dailyDevotion={dailyDevotion} className="panel-wide home-verse-panel" />
+        <VersePanel dailyDevotion={dailyDevotion} className="panel-wide" />
 
         <article className="panel panel-wide home-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Your feed</p>
               <h2>{`Hi ${memberName}`}</h2>
-              <p className="role-summary">{`${accountType} account moving through the ${activeRoleLabel} prayer flow.`}</p>
+              <p className="role-summary">{`${accountType} account with your prayer feed, praises, and daily guidance in one place.`}</p>
             </div>
             <span className="panel-tag">Fresh today</span>
           </div>

@@ -412,7 +412,6 @@ function App() {
   const [canInstallApp, setCanInstallApp] = useState(false)
   const [installHint, setInstallHint] = useState('')
   const [notifications, setNotifications] = useState(() => loadStoredNotifications())
-  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false)
   const [browserNotificationPermission, setBrowserNotificationPermission] = useState(() => {
     if (typeof window === 'undefined' || typeof window.Notification === 'undefined') {
       return 'unsupported'
@@ -631,14 +630,6 @@ function App() {
     }
   }, [deferredInstallPrompt])
 
-  const handleToggleNotificationCenter = useCallback(() => {
-    setNotificationCenterOpen((currentOpen) => !currentOpen)
-  }, [])
-
-  const handleCloseNotificationCenter = useCallback(() => {
-    setNotificationCenterOpen(false)
-  }, [])
-
   const handleMarkAllNotificationsRead = useCallback(() => {
     setNotifications((currentNotifications) =>
       currentNotifications.map((notification) => ({ ...notification, read: true })),
@@ -652,7 +643,6 @@ function App() {
       ),
     )
     setCurrentView(view)
-    setNotificationCenterOpen(false)
   }, [])
 
   const playWelcomeVoice = useCallback(
@@ -940,24 +930,6 @@ function App() {
     prayerRequestMigrationAttemptedRef.current = false
     journalMigrationAttemptedRef.current = false
   }, [authUserId])
-
-  useEffect(() => {
-    if (!notificationCenterOpen) {
-      return undefined
-    }
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setNotificationCenterOpen(false)
-      }
-    }
-
-    window.addEventListener('keydown', handleEscape)
-
-    return () => {
-      window.removeEventListener('keydown', handleEscape)
-    }
-  }, [notificationCenterOpen])
 
   useEffect(() => {
     const supportsMatchMedia = typeof window.matchMedia === 'function'
@@ -3000,23 +2972,6 @@ function App() {
 
   return (
     <main className="app-shell">
-      <NotificationCenter
-        notifications={notifications}
-        unreadCount={unreadNotificationCount}
-        isOpen={notificationCenterOpen}
-        onToggle={handleToggleNotificationCenter}
-        onClose={handleCloseNotificationCenter}
-        onMarkAllRead={handleMarkAllNotificationsRead}
-        onNotificationSelect={handleNotificationSelect}
-        onRequestPermission={handleEnableBrowserNotifications}
-        notificationPermission={browserNotificationPermission}
-        welcomeVoiceEnabled={welcomeVoiceEnabled}
-        onToggleWelcomeVoice={handleToggleWelcomeVoice}
-        onReplayWelcomeVoice={() => {
-          void playWelcomeVoice(true)
-        }}
-      />
-
       {canInstallApp ? (
         <button type="button" className="install-app-button" onClick={handleInstallApp}>
           <span className="install-app-button-icon" aria-hidden="true">
@@ -3037,56 +2992,20 @@ function App() {
 
       {installHint ? <p className="install-app-hint">{installHint}</p> : null}
 
-      <AppNavbar currentView={currentView} onChangeView={setCurrentView} />
-
-      <section className="panel role-shell">
-        <div className="role-shell-copy">
-          <p className="eyebrow">Workspace role</p>
-          <h2>{activeRoleConfig.label} view</h2>
-          <p className="role-summary">{activeRoleConfig.summary}</p>
-        </div>
-
-        <div className="role-switcher">
-          {canPreviewRolesLocally ? (
-            <div className="role-chip-group" role="tablist" aria-label="Local role preview">
-              {roleOptions.map((role) => (
-                <button
-                  key={role.id}
-                  type="button"
-                  className={activeRole === role.id ? 'role-chip role-chip-active' : 'role-chip'}
-                  onClick={() => setSelectedRole(role.id)}
-                  aria-pressed={activeRole === role.id}
-                >
-                  {role.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <p className="session-meta">
-            {canPreviewRolesLocally
-              ? 'Local role preview is active on this device. Sign in with Firebase to use your live assigned role across devices.'
-              : authSession.email
-                ? `${authSession.email} via ${authSession.provider}`
-                : `Signed in ${authSession.signedInAt}`}
-          </p>
-          <button type="button" className="ghost-action" onClick={handleSignOut} disabled={authBusy}>
-            Sign out
-          </button>
-        </div>
-      </section>
+      <AppNavbar
+        currentView={currentView}
+        onChangeView={setCurrentView}
+        unreadNotificationCount={unreadNotificationCount}
+      />
 
       {currentView === 'home' ? (
         <HomeView
           memberName={memberNameForGreeting}
           accountType={accountTypeLabel}
           answeredCount={answeredFocusItems.length}
-          completedCount={completedFocusItems}
           activeCount={activeFocusItems.length}
-          requestInputRef={requestInputRef}
-          journalTitleRef={journalTitleRef}
           prayedDeckCount={effectivePrayedDeckItems.length}
           pastoralReviewCount={effectivePastoralReviewItems.length}
-          activeRoleLabel={activeRoleConfig.label}
           dailyDevotion={dailyDevotion}
           dailyTeaching={dailyTeaching}
           livePrayerPreview={
@@ -3222,7 +3141,6 @@ function App() {
       {currentView === 'profile' ? (
         <ProfileView
           authSession={authSession}
-          activeRoleConfig={activeRoleConfig}
           activeCount={activeFocusItems.length}
           answeredCount={answeredFocusItems.length}
           journalCount={journalItems.length}
@@ -3230,6 +3148,7 @@ function App() {
           memberProfileForm={memberProfileForm}
           memberProfileStatus={memberProfileStatus}
           authBusy={authBusy}
+          handleSignOut={handleSignOut}
           handleMemberProfileChange={handleMemberProfileChange}
           handleMemberAvatarChange={handleMemberAvatarChange}
           handleSaveMemberProfile={handleSaveMemberProfile}
@@ -3247,6 +3166,22 @@ function App() {
           handleRefreshMemberDirectory={handleRefreshMemberDirectory}
           handleUpdateMemberRole={handleUpdateMemberRole}
           roleOptions={roleOptions}
+        />
+      ) : null}
+
+      {currentView === 'notification' ? (
+        <NotificationCenter
+          notifications={notifications}
+          unreadCount={unreadNotificationCount}
+          onMarkAllRead={handleMarkAllNotificationsRead}
+          onNotificationSelect={handleNotificationSelect}
+          onRequestPermission={handleEnableBrowserNotifications}
+          notificationPermission={browserNotificationPermission}
+          welcomeVoiceEnabled={welcomeVoiceEnabled}
+          onToggleWelcomeVoice={handleToggleWelcomeVoice}
+          onReplayWelcomeVoice={() => {
+            void playWelcomeVoice(true)
+          }}
         />
       ) : null}
 
