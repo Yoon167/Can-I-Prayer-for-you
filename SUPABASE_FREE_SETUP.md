@@ -73,6 +73,8 @@ These must be repository Actions secrets, not environment-only secrets, because 
 
 Get both values from `Project Settings` > `API` in Supabase.
 
+If your Supabase project shows a publishable key instead of an anon key, this app also accepts `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY` as the client key environment variable.
+
 The GitHub Pages workflow already reads those secrets during `npm run build`.
 
 ## 5. Redeploy the site
