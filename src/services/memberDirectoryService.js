@@ -3,12 +3,13 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   setDoc,
 } from 'firebase/firestore'
 import { firebaseDb, isFirebaseConfigured } from '../lib/firebaseClient.js'
-import { normalizeFirebaseSyncError } from './firebaseSyncUtils.js'
+import { createFirestoreSubscription, normalizeFirebaseSyncError } from './firebaseSyncUtils.js'
 
 const memberAccountsCollection = 'member_accounts'
 const validRoles = new Set(['member', 'intercessor', 'pastor', 'prayer-core'])
@@ -113,6 +114,36 @@ export async function listMemberAccounts() {
   } catch (error) {
     return { items: [], error: normalizeFirebaseSyncError(error, 'registered members') }
   }
+}
+
+export function subscribeToMemberAccounts(onItemsChange, onError) {
+  if (!firebaseDb || !isMemberDirectoryConfigured) {
+    return () => {}
+  }
+
+  return createFirestoreSubscription({
+    queryRef: query(collection(firebaseDb, memberAccountsCollection), orderBy('updatedAt', 'desc')),
+    resourceLabel: 'registered members',
+    loadLatest: listMemberAccounts,
+    onData: ({ items }) => onItemsChange(items),
+    onError,
+  })
+}
+
+export function subscribeToMemberAccount(userId, onItemChange, onError) {
+  if (!firebaseDb || !isMemberDirectoryConfigured || !userId) {
+    return () => {}
+  }
+
+  return onSnapshot(
+    doc(firebaseDb, memberAccountsCollection, userId),
+    (snapshot) => {
+      onItemChange(snapshot.exists() ? normalizeMemberAccountRecord(snapshot.data(), snapshot.id) : null)
+    },
+    (error) => {
+      onError?.(normalizeFirebaseSyncError(error, 'registered members'))
+    },
+  )
 }
 
 export async function updateMemberAccountRole(userId, role) {

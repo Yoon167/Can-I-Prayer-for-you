@@ -51,6 +51,8 @@ import {
 } from './services/authService.js'
 import {
   listMemberAccounts,
+  subscribeToMemberAccount,
+  subscribeToMemberAccounts,
   updateMemberAccountRole,
 } from './services/memberDirectoryService.js'
 import { getDailyHomeContent } from './data/dailyContent.js'
@@ -1964,46 +1966,97 @@ function App() {
     setMemberDirectoryBusy(false)
   }
 
+  const handleCurrentMemberAccountSync = useEffectEvent((item) => {
+    if (!item || authSession?.provider !== 'firebase' || authSession.userId !== item.userId) {
+      return
+    }
+
+    const nextRole = item.role ?? authSession.role
+    const nextProfile = {
+      ...authSession.memberProfile,
+      fullName: item.fullName,
+      displayName: item.displayName,
+      phone: item.phone,
+      address: item.address,
+      churchName: item.churchName,
+      pastorName: item.pastorName,
+      bio: item.bio,
+      avatarUrl: item.avatarUrl,
+      accountType: getAccountTypeFromRole(nextRole),
+    }
+
+    applyAuthSession({
+      ...authSession,
+      email: item.email || authSession.email,
+      role: nextRole,
+      memberProfile: nextProfile,
+    })
+
+    setMemberDirectoryItems((currentItems) => {
+      if (!currentItems.some((member) => member.userId === item.userId)) {
+        return currentItems
+      }
+
+      return currentItems.map((member) => (member.userId === item.userId ? item : member))
+    })
+  })
+
+  useEffect(() => {
+    if (authSession?.provider !== 'firebase' || !authUserId) {
+      return undefined
+    }
+
+    const unsubscribe = subscribeToMemberAccount(
+      authUserId,
+      (item) => {
+        handleCurrentMemberAccountSync(item)
+      },
+      (error) => {
+        if (!canManageMembers) {
+          return
+        }
+
+        setMemberDirectoryStatus(getMemberDirectorySyncMessage(error))
+        setMemberDirectoryTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
+      },
+    )
+
+    return () => {
+      unsubscribe()
+    }
+  }, [authSession?.provider, authUserId, canManageMembers])
+
   useEffect(() => {
     if (!canViewMemberDirectory) {
       setMemberDirectoryItems([])
       return undefined
     }
 
-    let isMounted = true
+    if (canManageMembers) {
+      setMemberDirectoryBusy(true)
+    }
 
-    Promise.resolve().then(async () => {
-      if (!isMounted) {
-        return
-      }
+    const unsubscribe = subscribeToMemberAccounts(
+      (items) => {
+        setMemberDirectoryItems(items)
 
-      if (canManageMembers) {
-        setMemberDirectoryBusy(true)
-      }
-
-      const { items, error } = await listMemberAccounts()
-
-      if (!isMounted) {
-        return
-      }
-
-      if (error) {
+        if (canManageMembers) {
+          setMemberDirectoryStatus('Registered members are syncing across signed-in devices.')
+          setMemberDirectoryTone('neutral')
+          setMemberDirectoryBusy(false)
+        }
+      },
+      (error) => {
         if (canManageMembers) {
           setMemberDirectoryStatus(getMemberDirectorySyncMessage(error))
           setMemberDirectoryTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
           setMemberDirectoryBusy(false)
         }
-        return
-      }
-
-      setMemberDirectoryItems(items)
-      if (canManageMembers) {
-        setMemberDirectoryBusy(false)
-      }
-    })
+      },
+    )
 
     return () => {
-      isMounted = false
+      unsubscribe()
     }
   }, [canManageMembers, canViewMemberDirectory])
 
