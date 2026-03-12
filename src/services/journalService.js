@@ -1,119 +1,102 @@
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
 import {
-  createResilientRealtimeSubscription,
-  normalizeSupabaseSyncError,
-  retrySupabaseOperation,
-} from './supabaseSyncUtils.js'
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  setDoc,
+} from 'firebase/firestore'
+import { firebaseDb, isFirebaseConfigured } from '../lib/firebaseClient.js'
+import { createFirestoreSubscription, normalizeFirebaseSyncError } from './firebaseSyncUtils.js'
 
-const journalEntriesTable = 'journal_entries'
+const journalEntriesCollection = 'journal_entries'
 
-function normalizeJournalEntryRow(row) {
+function normalizeJournalEntryRecord(record, id) {
   return {
-    id: row.id,
-    title: row.title ?? '',
-    detail: row.detail ?? '',
-    date: row.entry_date ?? '',
+    id,
+    title: record.title ?? '',
+    detail: record.detail ?? '',
+    date: record.date ?? '',
   }
 }
 
 function buildJournalEntryPayload(entry) {
   return {
-    id: entry.id,
     title: entry.title,
     detail: entry.detail,
-    entry_date: entry.date,
+    date: entry.date,
+    createdAt: entry.createdAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   }
 }
 
-export const isJournalSyncConfigured = isSupabaseConfigured
+export const isJournalSyncConfigured = isFirebaseConfigured
 
 export async function listJournalEntries() {
-  if (!supabase || !isJournalSyncConfigured) {
+  if (!firebaseDb || !isJournalSyncConfigured) {
     return { items: [], error: null }
   }
 
   try {
-    const { data, error } = await retrySupabaseOperation(
-      async () =>
-        supabase
-          .from(journalEntriesTable)
-          .select('id, title, detail, entry_date, created_at')
-          .order('created_at', { ascending: false }),
-      supabase,
+    const snapshot = await getDocs(
+      query(collection(firebaseDb, journalEntriesCollection), orderBy('createdAt', 'desc')),
     )
 
-    if (error) {
-      return { items: [], error: normalizeSupabaseSyncError(error, 'your journal') }
-    }
-
     return {
-      items: data.map(normalizeJournalEntryRow),
+      items: snapshot.docs.map((documentSnapshot) =>
+        normalizeJournalEntryRecord(documentSnapshot.data(), documentSnapshot.id),
+      ),
       error: null,
     }
   } catch (error) {
-    return { items: [], error: normalizeSupabaseSyncError(error, 'your journal') }
+    return { items: [], error: normalizeFirebaseSyncError(error, 'your journal') }
   }
 }
 
 export async function createJournalEntry(entry) {
-  if (!supabase || !isJournalSyncConfigured) {
+  if (!firebaseDb || !isJournalSyncConfigured) {
     return { item: entry, error: null }
   }
 
   try {
-    const { data, error } = await retrySupabaseOperation(
-      async () =>
-        supabase
-          .from(journalEntriesTable)
-          .insert(buildJournalEntryPayload(entry))
-          .select('id, title, detail, entry_date, created_at')
-          .single(),
-      supabase,
-    )
-
-    if (error) {
-      return { item: null, error: normalizeSupabaseSyncError(error, 'your journal') }
-    }
+    const payload = buildJournalEntryPayload(entry)
+    await setDoc(doc(firebaseDb, journalEntriesCollection, entry.id), payload)
 
     return {
-      item: normalizeJournalEntryRow(data),
+      item: normalizeJournalEntryRecord(payload, entry.id),
       error: null,
     }
   } catch (error) {
-    return { item: null, error: normalizeSupabaseSyncError(error, 'your journal') }
+    return { item: null, error: normalizeFirebaseSyncError(error, 'your journal') }
   }
 }
 
 export async function deleteJournalEntry(entryId) {
-  if (!supabase || !isJournalSyncConfigured) {
+  if (!firebaseDb || !isJournalSyncConfigured) {
     return { error: null }
   }
 
   try {
-    const { error } = await retrySupabaseOperation(
-      async () => supabase.from(journalEntriesTable).delete().eq('id', entryId),
-      supabase,
-    )
+    await deleteDoc(doc(firebaseDb, journalEntriesCollection, entryId))
 
     return {
-      error: error ? normalizeSupabaseSyncError(error, 'your journal') : null,
+      error: null,
     }
   } catch (error) {
     return {
-      error: normalizeSupabaseSyncError(error, 'your journal'),
+      error: normalizeFirebaseSyncError(error, 'your journal'),
     }
   }
 }
 
 export function subscribeToJournalEntries(onItemsChange, onError) {
-  if (!supabase || !isJournalSyncConfigured) {
+  if (!firebaseDb || !isJournalSyncConfigured) {
     return () => {}
   }
 
-  return createResilientRealtimeSubscription({
-    supabaseClient: supabase,
-    channelName: 'journal-entries-sync',
-    table: journalEntriesTable,
+  return createFirestoreSubscription({
+    queryRef: query(collection(firebaseDb, journalEntriesCollection), orderBy('createdAt', 'desc')),
     resourceLabel: 'your journal',
     loadLatest: listJournalEntries,
     onData: ({ items }) => onItemsChange(items),

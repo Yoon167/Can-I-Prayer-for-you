@@ -50,8 +50,8 @@ function AnalyticsDashboard({
           <h2>Live prayer movement and response</h2>
           <p className="role-summary analytics-summary">
             {sharedPrayerRequestsEnabled
-              ? `${activeRoleLabel} view with live Supabase sync across accounts.`
-              : 'Local-only analytics view for this device until Supabase reconnects.'}
+              ? `${activeRoleLabel} view with live Firebase sync across accounts.`
+              : 'Local-only analytics view for this device until Firebase reconnects.'}
           </p>
         </div>
         <span className="panel-tag analytics-tag">{answeredRequests} answered</span>

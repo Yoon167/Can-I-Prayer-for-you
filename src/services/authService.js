@@ -1,4 +1,13 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js'
+import {
+  applyActionCode,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from 'firebase/auth'
+import { firebaseAuth, isFirebaseConfigured } from '../lib/firebaseClient.js'
 import { getMemberAccount, upsertMemberAccount } from './memberDirectoryService.js'
 import { formatAnsweredDate } from '../utils/prayerAppUtils.js'
 
@@ -52,7 +61,7 @@ function getAuthRateLimitMessage() {
   return `Too many sign-in attempts right now. Please wait ${remainingSeconds} seconds and try again.`
 }
 
-function getSupabaseEmailRedirectUrl() {
+function getFirebaseEmailRedirectUrl() {
   if (typeof window === 'undefined') {
     return undefined
   }
@@ -63,14 +72,17 @@ function getSupabaseEmailRedirectUrl() {
   return redirectUrl.toString()
 }
 
-function clearSupabaseAuthUrlParams() {
+function clearFirebaseAuthUrlParams() {
   if (typeof window === 'undefined') {
     return
   }
 
   const nextUrl = new URL(window.location.href)
-  nextUrl.searchParams.delete('token_hash')
-  nextUrl.searchParams.delete('type')
+  nextUrl.searchParams.delete('mode')
+  nextUrl.searchParams.delete('oobCode')
+  nextUrl.searchParams.delete('apiKey')
+  nextUrl.searchParams.delete('continueUrl')
+  nextUrl.searchParams.delete('lang')
   nextUrl.searchParams.delete('error')
   nextUrl.searchParams.delete('error_code')
   nextUrl.searchParams.delete('error_description')
@@ -78,7 +90,7 @@ function clearSupabaseAuthUrlParams() {
   window.history.replaceState({}, document.title, nextUrl.toString())
 }
 
-function normalizeSupabaseUrlMessage(rawMessage, fallbackMessage) {
+function normalizeFirebaseUrlMessage(rawMessage, fallbackMessage) {
   if (!rawMessage) {
     return fallbackMessage
   }
@@ -102,72 +114,90 @@ function isEmailConfirmationError(error) {
   )
 }
 
-function normalizeSupabaseAuthError(error) {
+function normalizeFirebaseAuthError(error) {
+  const code = error?.code ?? ''
+
   if (isRateLimitError(error)) {
     setAuthRateLimitCooldown()
     return getAuthRateLimitMessage()
   }
 
-  if ((error?.message?.toLowerCase?.() ?? '').includes('user already registered')) {
+  if (code === 'auth/email-already-in-use') {
     return 'That email is already registered. Try signing in, or use resend confirmation if the account is still waiting to be confirmed.'
   }
 
-  if (isEmailConfirmationError(error)) {
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+    return 'No account matched that email and password.'
+  }
+
+  if (code === 'auth/weak-password') {
+    return 'Password must be at least 6 characters long.'
+  }
+
+  if (code === 'auth/invalid-email') {
+    return 'Enter a valid email address to continue.'
+  }
+
+  if (isEmailConfirmationError(error) || code === 'auth/email-not-verified') {
     return 'Your email is not confirmed yet. Open the confirmation email, or resend it below.'
   }
 
-  if ((error?.message?.toLowerCase?.() ?? '').includes('email address not authorized')) {
-    return 'Supabase could not send the confirmation email. If you are testing, add the address to your Supabase team or finish enabling custom SMTP.'
+  if (code === 'auth/too-many-requests') {
+    return getAuthRateLimitMessage()
+  }
+
+  if (code === 'auth/network-request-failed') {
+    return 'Authentication is unavailable right now. Check your network connection and try again.'
   }
 
   return error?.message ?? 'Authentication is unavailable right now.'
 }
 
-function isPendingOrObfuscatedSignupUser(user) {
-  return Array.isArray(user?.identities) && user.identities.length === 0
+async function sendPrayerAppVerificationEmail(user) {
+  await sendEmailVerification(user, {
+    url: getFirebaseEmailRedirectUrl(),
+    handleCodeInApp: true,
+  })
 }
 
 export async function completePrayerAppEmailConfirmationFromUrl() {
-  if (!isSupabaseConfigured || !supabase || typeof window === 'undefined') {
+  if (!isFirebaseConfigured || !firebaseAuth || typeof window === 'undefined') {
     return { handled: false }
   }
 
   const currentUrl = new URL(window.location.href)
-  const tokenHash = currentUrl.searchParams.get('token_hash')
-  const verificationType = currentUrl.searchParams.get('type')
+  const verificationMode = currentUrl.searchParams.get('mode')
+  const actionCode = currentUrl.searchParams.get('oobCode')
   const authError = currentUrl.searchParams.get('error')
   const authErrorDescription = currentUrl.searchParams.get('error_description')
 
   if (authError || authErrorDescription) {
-    clearSupabaseAuthUrlParams()
+    clearFirebaseAuthUrlParams()
     return {
       handled: true,
-      error: normalizeSupabaseUrlMessage(
+      error: normalizeFirebaseUrlMessage(
         authErrorDescription,
         'The email confirmation link could not be completed. Request a fresh confirmation email and try again.',
       ),
     }
   }
 
-  if (!tokenHash || !verificationType) {
+  if (!actionCode || !verificationMode) {
     return { handled: false }
   }
 
-  if (!['signup', 'invite', 'email', 'email_change'].includes(verificationType)) {
+  if (verificationMode !== 'verifyEmail') {
     return { handled: false }
   }
 
-  const { error } = await supabase.auth.verifyOtp({
-    token_hash: tokenHash,
-    type: verificationType,
-  })
-
-  clearSupabaseAuthUrlParams()
-
-  if (error) {
+  try {
+    await applyActionCode(firebaseAuth, actionCode)
+    clearFirebaseAuthUrlParams()
+  } catch (error) {
+    clearFirebaseAuthUrlParams()
     return {
       handled: true,
-      error: normalizeSupabaseAuthError(error),
+      error: normalizeFirebaseAuthError(error),
     }
   }
 
@@ -325,16 +355,14 @@ function getSessionRole(session) {
   )
 }
 
-async function syncSupabaseMemberContext(user) {
+async function syncFirebaseMemberContext(user) {
   const fallbackProfile = getMemberProfile(user)
-  const fallbackRole = normalizePrayerAppRole(
-    user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(fallbackProfile.accountType),
-  )
+  const fallbackRole = normalizePrayerAppRole(mapAccountTypeToRole(fallbackProfile.accountType))
 
   let memberAccount = null
 
   try {
-    const { item } = await getMemberAccount(user?.id)
+    const { item } = await getMemberAccount(user?.uid)
     memberAccount = item
   } catch {
     memberAccount = null
@@ -345,7 +373,7 @@ async function syncSupabaseMemberContext(user) {
 
   try {
     const { item } = await upsertMemberAccount({
-      userId: user?.id ?? '',
+      userId: user?.uid ?? '',
       email: user?.email ?? memberAccount?.email ?? '',
       role: resolvedRole,
       memberProfile: mergedProfile,
@@ -367,14 +395,14 @@ async function syncSupabaseMemberContext(user) {
   }
 }
 
-async function buildSupabaseSessionFromUser(user) {
-  const { role, memberProfile } = await syncSupabaseMemberContext(user)
+async function buildFirebaseSessionFromUser(user) {
+  const { role, memberProfile } = await syncFirebaseMemberContext(user)
 
-  return buildSession(role, user?.email ?? '', 'supabase', memberProfile, user?.id ?? '')
+  return buildSession(role, user?.email ?? '', 'firebase', memberProfile, user?.uid ?? '')
 }
 
 export async function signInToPrayerApp({ email, password }) {
-  if (isSupabaseConfigured && supabase) {
+  if (isFirebaseConfigured && firebaseAuth) {
     const trimmedEmail = normalizeEmailAddress(email)
 
     if (!trimmedEmail || !password) {
@@ -385,22 +413,27 @@ export async function signInToPrayerApp({ email, password }) {
       return { error: getAuthRateLimitMessage() }
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: trimmedEmail,
-      password,
-    })
+    try {
+      const credential = await signInWithEmailAndPassword(firebaseAuth, trimmedEmail, password)
+      const user = credential.user
 
-    if (error) {
+      if (!user.emailVerified) {
+        return {
+          error: normalizeFirebaseAuthError({ code: 'auth/email-not-verified' }),
+          requiresEmailConfirmation: true,
+        }
+      }
+
+      clearAuthRateLimitCooldown()
+
       return {
-        error: normalizeSupabaseAuthError(error),
+        session: await buildFirebaseSessionFromUser(user),
+      }
+    } catch (error) {
+      return {
+        error: normalizeFirebaseAuthError(error),
         requiresEmailConfirmation: isEmailConfirmationError(error),
       }
-    }
-
-    clearAuthRateLimitCooldown()
-
-    return {
-      session: await buildSupabaseSessionFromUser(data.user ?? data.session?.user),
     }
   }
 
@@ -447,40 +480,25 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
     return { error: 'Password must be at least 6 characters long.' }
   }
 
-  if (isSupabaseConfigured && supabase) {
+  if (isFirebaseConfigured && firebaseAuth) {
     if (getAuthRateLimitUntil() > Date.now()) {
       return { error: getAuthRateLimitMessage() }
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: trimmedEmail,
-      password,
-      options: {
-        emailRedirectTo: getSupabaseEmailRedirectUrl(),
-        data: {
-          role,
-          memberProfile: normalizedProfile,
-        },
-      },
-    })
+    try {
+      const credential = await createUserWithEmailAndPassword(firebaseAuth, trimmedEmail, password)
+      const user = credential.user
 
-    if (error) {
-      return { error: normalizeSupabaseAuthError(error) }
-    }
+      await upsertMemberAccount({
+        userId: user.uid,
+        email: trimmedEmail,
+        role,
+        memberProfile: normalizedProfile,
+      })
 
-    clearAuthRateLimitCooldown()
+      await sendPrayerAppVerificationEmail(user)
+      clearAuthRateLimitCooldown()
 
-    if (isPendingOrObfuscatedSignupUser(data.user)) {
-      return {
-        session: null,
-        pendingConfirmationEmail: trimmedEmail,
-        requiresEmailConfirmation: true,
-        message:
-          'This email may already be registered or still waiting for confirmation. Try signing in, or resend the confirmation email below.',
-      }
-    }
-
-    if (!data.session) {
       return {
         session: null,
         pendingConfirmationEmail: trimmedEmail,
@@ -488,11 +506,8 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
         message:
           'Account created. Check your email for the confirmation link before signing in. If it does not arrive, resend it below.',
       }
-    }
-
-    return {
-      session: await buildSupabaseSessionFromUser(data.user),
-      message: 'Account created successfully.',
+    } catch (error) {
+      return { error: normalizeFirebaseAuthError(error) }
     }
   }
 
@@ -519,10 +534,10 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
 }
 
 export async function signOutOfPrayerApp() {
-  if (isSupabaseConfigured && supabase) {
-    const { error } = await supabase.auth.signOut({ scope: 'local' })
-
-    if (error) {
+  if (isFirebaseConfigured && firebaseAuth) {
+    try {
+      await signOut(firebaseAuth)
+    } catch (error) {
       return { error: error.message }
     }
   }
@@ -531,17 +546,17 @@ export async function signOutOfPrayerApp() {
 }
 
 export async function restorePrayerAppSession(roleOptions) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isFirebaseConfigured || !firebaseAuth) {
     return null
   }
 
-  const { data, error } = await supabase.auth.getSession()
+  const user = firebaseAuth.currentUser
 
-  if (error || !data.session) {
+  if (!user || !user.emailVerified) {
     return null
   }
 
-  const nextSession = await buildSupabaseSessionFromUser(data.session.user)
+  const nextSession = await buildFirebaseSessionFromUser(user)
 
   if (!roleOptions.some((role) => role.id === nextSession.role)) {
     return null
@@ -558,7 +573,7 @@ export async function savePrayerAppMemberProfile(profile, currentSession) {
   }
   const role = preservedRole
 
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isFirebaseConfigured || !firebaseAuth) {
     if (currentSession?.provider === 'local' && currentSession.email) {
       const nextAccounts = loadLocalAccounts().map((account) =>
         account.email?.toLowerCase() === currentSession.email.toLowerCase()
@@ -582,39 +597,28 @@ export async function savePrayerAppMemberProfile(profile, currentSession) {
     }
   }
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const user = firebaseAuth.currentUser
 
-  if (userError || !user) {
-    return { error: userError?.message ?? 'Unable to load the current user.' }
+  if (!user) {
+    return { error: 'Unable to load the current user.' }
   }
 
-  const mergedMetadata = {
-    ...(user.user_metadata ?? {}),
-    role,
-    memberProfile: normalizedProfile,
-  }
-
-  const { data, error } = await supabase.auth.updateUser({
-    data: mergedMetadata,
-  })
-
-  if (error) {
-    return { error: error.message }
+  try {
+    await updateProfile(user, {
+      displayName: normalizedProfile.displayName || normalizedProfile.fullName || null,
+    })
+  } catch {
+    // Firestore remains the source of truth for profile fields.
   }
 
   const { item: savedAccount, error: directoryError } = await upsertMemberAccount({
-    userId: user.id,
-    email: data.user?.email ?? user.email ?? currentSession?.email ?? '',
+    userId: user.uid,
+    email: user.email ?? currentSession?.email ?? '',
     role,
     memberProfile: normalizedProfile,
   })
 
-  const sessionRole = normalizePrayerAppRole(
-    savedAccount?.role ?? user.app_metadata?.role ?? mergedMetadata.role ?? null,
-  )
+  const sessionRole = normalizePrayerAppRole(savedAccount?.role ?? role)
   const nextProfile = mergeMemberProfile(normalizedProfile, savedAccount, sessionRole ?? role)
 
   return {
@@ -623,29 +627,27 @@ export async function savePrayerAppMemberProfile(profile, currentSession) {
     session: sessionRole
       ? buildSession(
           sessionRole,
-          data.user?.email ?? user.email ?? '',
-          'supabase',
+          user.email ?? '',
+          'firebase',
           nextProfile,
-          data.user?.id ?? user.id,
+          user.uid,
         )
       : null,
   }
 }
 
 export function subscribeToPrayerAuthChanges(roleOptions, onSessionChange) {
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isFirebaseConfigured || !firebaseAuth) {
     return () => {}
   }
 
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session) {
+  const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+    if (!user || !user.emailVerified) {
       onSessionChange(null)
       return
     }
 
-    buildSupabaseSessionFromUser(session.user)
+    buildFirebaseSessionFromUser(user)
       .then((nextSession) => {
         if (!roleOptions.some((role) => role.id === nextSession.role)) {
           onSessionChange(null)
@@ -655,7 +657,7 @@ export function subscribeToPrayerAuthChanges(roleOptions, onSessionChange) {
         onSessionChange(nextSession)
       })
       .catch(() => {
-        const sessionRole = getSessionRole(session)
+        const sessionRole = getSessionRole({ user })
 
         if (!roleOptions.some((role) => role.id === sessionRole)) {
           onSessionChange(null)
@@ -665,17 +667,17 @@ export function subscribeToPrayerAuthChanges(roleOptions, onSessionChange) {
         onSessionChange(
           buildSession(
             sessionRole,
-            session.user?.email ?? '',
-            'supabase',
-            getMemberProfile(session.user),
-            session.user?.id ?? '',
+            user.email ?? '',
+            'firebase',
+            getMemberProfile(user),
+            user.uid ?? '',
           ),
         )
       })
   })
 
   return () => {
-    subscription.unsubscribe()
+    unsubscribe()
   }
 }
 
@@ -690,24 +692,31 @@ export async function resendPrayerAppConfirmationEmail(email) {
     return { error: 'Enter a valid email address before resending the confirmation email.' }
   }
 
-  if (!isSupabaseConfigured || !supabase) {
-    return { error: 'Confirmation emails are only available when Supabase auth is configured.' }
+  if (!isFirebaseConfigured || !firebaseAuth) {
+    return { error: 'Confirmation emails are only available when Firebase auth is configured.' }
   }
 
   if (getAuthRateLimitUntil() > Date.now()) {
     return { error: getAuthRateLimitMessage() }
   }
 
-  const { error } = await supabase.auth.resend({
-    type: 'signup',
-    email: trimmedEmail,
-    options: {
-      emailRedirectTo: getSupabaseEmailRedirectUrl(),
-    },
-  })
+  const currentUser = firebaseAuth.currentUser
 
-  if (error) {
-    return { error: normalizeSupabaseAuthError(error) }
+  if (!currentUser || currentUser.email?.toLowerCase() !== trimmedEmail) {
+    return {
+      error:
+        'Firebase can resend the verification email only for the account currently open in this browser. Sign in again with that account first.',
+    }
+  }
+
+  if (currentUser.emailVerified) {
+    return { message: 'This email address is already verified.' }
+  }
+
+  try {
+    await sendPrayerAppVerificationEmail(currentUser)
+  } catch (error) {
+    return { error: normalizeFirebaseAuthError(error) }
   }
 
   clearAuthRateLimitCooldown()

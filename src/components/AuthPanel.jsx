@@ -27,7 +27,7 @@ function AuthPanel({
           <p className="auth-text">
             {providerConfigured
               ? 'Create an account or sign in to join a global prayer community with your profile, requests, and journal synced across devices.'
-              : 'Cloud sync is not configured, so this published version stores accounts, requests, and journal entries only in this browser. Add Supabase later if you want multi-device sync.'}
+              : 'Cloud sync is not configured, so this published version stores accounts, requests, and journal entries only in this browser. Add Firebase later if you want multi-device sync.'}
           </p>
         </div>
 

@@ -1,7 +1,16 @@
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
-import { normalizeSupabaseSyncError, retrySupabaseOperation } from './supabaseSyncUtils.js'
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  setDoc,
+} from 'firebase/firestore'
+import { firebaseDb, isFirebaseConfigured } from '../lib/firebaseClient.js'
+import { normalizeFirebaseSyncError } from './firebaseSyncUtils.js'
 
-const memberAccountsTable = 'member_accounts'
+const memberAccountsCollection = 'member_accounts'
 const validRoles = new Set(['member', 'intercessor', 'pastor', 'prayer-core'])
 
 function normalizeRole(role) {
@@ -12,153 +21,121 @@ function normalizeRole(role) {
   return validRoles.has(role) ? role : 'member'
 }
 
-function normalizeMemberAccountRow(row) {
+function normalizeMemberAccountRecord(record, userId) {
   return {
-    userId: row.user_id,
-    email: row.email ?? '',
-    role: normalizeRole(row.role),
-    fullName: row.full_name ?? '',
-    displayName: row.display_name ?? '',
-    phone: row.phone ?? '',
-    address: row.address ?? '',
-    churchName: row.church_name ?? '',
-    pastorName: row.pastor_name ?? '',
-    bio: row.bio ?? '',
-    avatarUrl: row.avatar_url ?? '',
-    updatedAt: row.updated_at ?? null,
+    userId,
+    email: record.email ?? '',
+    role: normalizeRole(record.role),
+    fullName: record.fullName ?? '',
+    displayName: record.displayName ?? '',
+    phone: record.phone ?? '',
+    address: record.address ?? '',
+    churchName: record.churchName ?? '',
+    pastorName: record.pastorName ?? '',
+    bio: record.bio ?? '',
+    avatarUrl: record.avatarUrl ?? '',
+    updatedAt: record.updatedAt ?? null,
   }
 }
 
 function buildMemberAccountPayload({ userId, email, role, memberProfile }) {
   return {
-    user_id: userId,
+    userId,
     email: email ?? '',
     role: normalizeRole(role),
-    full_name: memberProfile.fullName ?? '',
-    display_name: memberProfile.displayName ?? '',
+    fullName: memberProfile.fullName ?? '',
+    displayName: memberProfile.displayName ?? '',
     phone: memberProfile.phone ?? '',
     address: memberProfile.address ?? '',
-    church_name: memberProfile.churchName ?? '',
-    pastor_name: memberProfile.pastorName ?? '',
+    churchName: memberProfile.churchName ?? '',
+    pastorName: memberProfile.pastorName ?? '',
     bio: memberProfile.bio ?? '',
-    avatar_url: memberProfile.avatarUrl ?? '',
+    avatarUrl: memberProfile.avatarUrl ?? '',
+    updatedAt: new Date().toISOString(),
   }
 }
 
-export const isMemberDirectoryConfigured = isSupabaseConfigured
+export const isMemberDirectoryConfigured = isFirebaseConfigured
 
 export async function getMemberAccount(userId) {
-  if (!supabase || !isMemberDirectoryConfigured || !userId) {
+  if (!firebaseDb || !isMemberDirectoryConfigured || !userId) {
     return { item: null, error: null }
   }
 
   try {
-    const { data, error } = await retrySupabaseOperation(
-      async () =>
-        supabase
-          .from(memberAccountsTable)
-          .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
-          .eq('user_id', userId)
-          .maybeSingle(),
-      supabase,
-    )
-
-    if (error) {
-      return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
-    }
+    const snapshot = await getDoc(doc(firebaseDb, memberAccountsCollection, userId))
 
     return {
-      item: data ? normalizeMemberAccountRow(data) : null,
+      item: snapshot.exists() ? normalizeMemberAccountRecord(snapshot.data(), snapshot.id) : null,
       error: null,
     }
   } catch (error) {
-    return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
+    return { item: null, error: normalizeFirebaseSyncError(error, 'registered members') }
   }
 }
 
 export async function upsertMemberAccount(memberAccount) {
-  if (!supabase || !isMemberDirectoryConfigured) {
+  if (!firebaseDb || !isMemberDirectoryConfigured) {
     return { item: memberAccount, error: null }
   }
 
   try {
-    const { data, error } = await retrySupabaseOperation(
-      async () =>
-        supabase
-          .from(memberAccountsTable)
-          .upsert(buildMemberAccountPayload(memberAccount), { onConflict: 'user_id' })
-          .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
-          .single(),
-      supabase,
-    )
+    const payload = buildMemberAccountPayload(memberAccount)
+    const userId = memberAccount.userId ?? payload.userId
 
-    if (error) {
-      return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
-    }
+    await setDoc(doc(firebaseDb, memberAccountsCollection, userId), payload, { merge: true })
 
     return {
-      item: normalizeMemberAccountRow(data),
+      item: normalizeMemberAccountRecord(payload, userId),
       error: null,
     }
   } catch (error) {
-    return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
+    return { item: null, error: normalizeFirebaseSyncError(error, 'registered members') }
   }
 }
 
 export async function listMemberAccounts() {
-  if (!supabase || !isMemberDirectoryConfigured) {
+  if (!firebaseDb || !isMemberDirectoryConfigured) {
     return { items: [], error: null }
   }
 
   try {
-    const { data, error } = await retrySupabaseOperation(
-      async () =>
-        supabase
-          .from(memberAccountsTable)
-          .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
-          .order('updated_at', { ascending: false }),
-      supabase,
+    const snapshot = await getDocs(
+      query(collection(firebaseDb, memberAccountsCollection), orderBy('updatedAt', 'desc')),
     )
 
-    if (error) {
-      return { items: [], error: normalizeSupabaseSyncError(error, 'registered members') }
-    }
-
     return {
-      items: data.map(normalizeMemberAccountRow),
+      items: snapshot.docs.map((documentSnapshot) =>
+        normalizeMemberAccountRecord(documentSnapshot.data(), documentSnapshot.id),
+      ),
       error: null,
     }
   } catch (error) {
-    return { items: [], error: normalizeSupabaseSyncError(error, 'registered members') }
+    return { items: [], error: normalizeFirebaseSyncError(error, 'registered members') }
   }
 }
 
 export async function updateMemberAccountRole(userId, role) {
-  if (!supabase || !isMemberDirectoryConfigured) {
+  if (!firebaseDb || !isMemberDirectoryConfigured) {
     return { item: { userId, role: normalizeRole(role) }, error: null }
   }
 
   try {
-    const { data, error } = await retrySupabaseOperation(
-      async () =>
-        supabase
-          .from(memberAccountsTable)
-          .update({ role: normalizeRole(role) })
-          .eq('user_id', userId)
-          .select('user_id, email, role, full_name, display_name, phone, address, church_name, pastor_name, bio, avatar_url, updated_at')
-          .single(),
-      supabase,
-    )
-
-    if (error) {
-      return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
+    const documentRef = doc(firebaseDb, memberAccountsCollection, userId)
+    const existingSnapshot = await getDoc(documentRef)
+    const nextRecord = {
+      ...(existingSnapshot.exists() ? existingSnapshot.data() : { userId }),
+      role: normalizeRole(role),
+      updatedAt: new Date().toISOString(),
     }
 
+    await setDoc(documentRef, nextRecord, { merge: true })
+
     return {
-      item: normalizeMemberAccountRow(data),
+      item: normalizeMemberAccountRecord(nextRecord, userId),
       error: null,
     }
   } catch (error) {
-    return { item: null, error: normalizeSupabaseSyncError(error, 'registered members') }
+    return { item: null, error: normalizeFirebaseSyncError(error, 'registered members') }
   }
 }

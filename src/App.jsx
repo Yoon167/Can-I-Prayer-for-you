@@ -38,7 +38,7 @@ import {
   roleOptions,
   roleStorageKey,
 } from './data/dashboardData.js'
-import { isSupabaseConfigured } from './lib/supabaseClient.js'
+import { isFirebaseConfigured as isFirebaseConfigured } from './lib/firebaseClient.js'
 import {
   completePrayerAppEmailConfirmationFromUrl,
   resendPrayerAppConfirmationEmail,
@@ -77,7 +77,7 @@ import {
   listJournalEntries,
   subscribeToJournalEntries,
 } from './services/journalService.js'
-import { isTransientSupabaseError } from './services/supabaseSyncUtils.js'
+import { isTransientFirebaseError as isTransientFirebaseError } from './services/firebaseSyncUtils.js'
 import {
   createId,
   formatAnsweredDate,
@@ -295,13 +295,13 @@ function canRunPublishedUpdateChecks() {
   return !Capacitor.isNativePlatform()
 }
 
-function getSupabaseSignInRequiredMessage(resourceLabel) {
-  return `Sign in to your Supabase-backed account before saving ${resourceLabel}.`
+function getFirebaseSignInRequiredMessage(resourceLabel) {
+  return `Sign in to your Firebase-backed account before saving ${resourceLabel}.`
 }
 
 function App() {
   const currentBuildId = import.meta.env.VITE_APP_BUILD_ID || 'dev-local'
-  const [authReady, setAuthReady] = useState(() => !isSupabaseConfigured)
+  const [authReady, setAuthReady] = useState(() => !isFirebaseConfigured)
   const [authSession, setAuthSession] = useState(() => {
     if (typeof window === 'undefined') {
       return null
@@ -393,7 +393,7 @@ function App() {
       speaker: fallbackTeaching.speaker,
       theme: fallbackTeaching.theme,
       summary: fallbackTeaching.summary,
-      source: 'Supabase teaching feed',
+      source: 'Firebase teaching feed',
       link: '',
     }
   })
@@ -492,7 +492,7 @@ function App() {
       setPendingConfirmationEmail('')
     }
 
-    if (normalizedSession?.provider !== 'supabase') {
+    if (normalizedSession?.provider !== 'firebase') {
       const fallbackTeaching = getFallbackTeaching()
 
       setHomeContent((currentContent) => ({
@@ -505,12 +505,12 @@ function App() {
         speaker: fallbackTeaching.speaker,
         theme: fallbackTeaching.theme,
         summary: fallbackTeaching.summary,
-        source: 'Supabase teaching feed',
+        source: 'Firebase teaching feed',
         link: '',
       })
     }
 
-    if (normalizedSession?.provider === 'supabase' && normalizedSession.memberProfile) {
+    if (normalizedSession?.provider === 'firebase' && normalizedSession.memberProfile) {
       setMemberProfile(normalizedSession.memberProfile)
       setMemberProfileForm(normalizedSession.memberProfile)
     }
@@ -529,15 +529,15 @@ function App() {
   function getPrayerRequestSyncMessage(error) {
     const normalizedError = error?.toLowerCase?.() ?? ''
 
-    if (isTransientSupabaseError(error)) {
-      return 'Shared request sync is temporarily reconnecting to Supabase.'
+    if (isTransientFirebaseError(error)) {
+      return 'Shared request sync is temporarily reconnecting to Firebase.'
     }
 
     if (
       normalizedError.includes('prayer_requests') &&
       (normalizedError.includes('does not exist') || normalizedError.includes('schema cache'))
     ) {
-      return 'Shared request sync is unavailable because your Supabase project is missing the latest prayer request columns. Run supabase/bootstrap.sql in Supabase SQL Editor, then sign out and sign back in.'
+      return 'Shared request sync is unavailable because the Firebase prayer request collection is not ready yet. Confirm the Firestore collections and security rules are deployed, then sign out and sign back in.'
     }
 
     if (
@@ -545,7 +545,7 @@ function App() {
       normalizedError.includes('permission denied') ||
       normalizedError.includes('forbidden')
     ) {
-      return 'Shared request sync is blocked by Supabase permissions. Confirm supabase/bootstrap.sql finished successfully, then sign out and sign back in to refresh your role.'
+      return 'Shared request sync is blocked by Firebase permissions. Confirm your Firestore security rules allow this action, then sign out and sign back in to refresh your role.'
     }
 
     return error
@@ -554,8 +554,8 @@ function App() {
   }
 
   function getJournalSyncMessage(error) {
-    if (isTransientSupabaseError(error)) {
-      return 'Journal sync is temporarily reconnecting to Supabase.'
+    if (isTransientFirebaseError(error)) {
+      return 'Journal sync is temporarily reconnecting to Firebase.'
     }
 
     return error
@@ -564,8 +564,8 @@ function App() {
   }
 
   function getTeachingSyncMessage(error) {
-    if (isTransientSupabaseError(error)) {
-      return 'Daily teaching sync is temporarily reconnecting to Supabase.'
+    if (isTransientFirebaseError(error)) {
+      return 'Daily teaching sync is temporarily reconnecting to Firebase.'
     }
 
     return error
@@ -574,8 +574,8 @@ function App() {
   }
 
   function getMemberDirectorySyncMessage(error) {
-    if (isTransientSupabaseError(error)) {
-      return 'Registered members are temporarily unavailable while Supabase reconnects.'
+    if (isTransientFirebaseError(error)) {
+      return 'Registered members are temporarily unavailable while Firebase reconnects.'
     }
 
     return error
@@ -814,8 +814,8 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setRequestSyncStatus('Supabase is reconnecting, so the follow-up message was not saved to Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setRequestSyncStatus('Firebase is reconnecting, so the follow-up message was not saved to Firebase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -876,8 +876,8 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setRequestSyncStatus('Supabase is reconnecting, so the testimony was not saved to Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setRequestSyncStatus('Firebase is reconnecting, so the testimony was not saved to Firebase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -1110,13 +1110,13 @@ function App() {
   }, [currentBuildId])
 
   useEffect(() => {
-    if (!isSupabaseConfigured) {
+    if (!isFirebaseConfigured) {
       return undefined
     }
 
     let isMounted = true
 
-    const initializeSupabaseAuth = async () => {
+    const initializeFirebaseAuth = async () => {
       const callbackResult = await completePrayerAppEmailConfirmationFromUrl()
 
       if (!isMounted) {
@@ -1147,12 +1147,12 @@ function App() {
 
       applyAuthSession(null)
       setAuthNotice(
-        'Unable to connect to Supabase right now. Check your Supabase URL, anon key, and allowed site URL, then refresh.',
+        'Unable to connect to Firebase right now. Check your Firebase web config and authorized domain settings, then refresh.',
       )
       setAuthReady(true)
     }
 
-    initializeSupabaseAuth()
+    initializeFirebaseAuth()
       .catch(() => {
         handleAuthRestoreFailure()
       })
@@ -1223,12 +1223,12 @@ function App() {
   }, [])
 
   const sharedPrayerRequestsEnabled =
-    isPrayerRequestSyncConfigured && authSession?.provider === 'supabase'
-  const sharedJournalEnabled = isJournalSyncConfigured && authSession?.provider === 'supabase'
-  const sharedTeachingEnabled = isTeachingSyncConfigured && authSession?.provider === 'supabase'
-  const supabaseWriteRequiresSignIn = isSupabaseConfigured && authSession?.provider !== 'supabase'
+    isPrayerRequestSyncConfigured && authSession?.provider === 'firebase'
+  const sharedJournalEnabled = isJournalSyncConfigured && authSession?.provider === 'firebase'
+  const sharedTeachingEnabled = isTeachingSyncConfigured && authSession?.provider === 'firebase'
+  const firebaseWriteRequiresSignIn = isFirebaseConfigured && authSession?.provider !== 'firebase'
 
-  const migrateLocalPrayerRequestsToSupabase = useEffectEvent(async (remoteItems) => {
+  const migrateLocalPrayerRequestsToFirebase = useEffectEvent(async (remoteItems) => {
     if (prayerRequestMigrationAttemptedRef.current || remoteItems.length > 0) {
       return remoteItems
     }
@@ -1274,7 +1274,7 @@ function App() {
     return items
   })
 
-  const migrateLocalJournalEntriesToSupabase = useEffectEvent(async (remoteItems) => {
+  const migrateLocalJournalEntriesToFirebase = useEffectEvent(async (remoteItems) => {
     if (journalMigrationAttemptedRef.current || remoteItems.length > 0) {
       return remoteItems
     }
@@ -1326,13 +1326,13 @@ function App() {
       if (error) {
         if (!preserveStatus) {
           setRequestSyncStatus(getPrayerRequestSyncMessage(error))
-          setRequestSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+          setRequestSyncTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
         }
 
         return false
       }
 
-      const nextItems = await migrateLocalPrayerRequestsToSupabase(items)
+      const nextItems = await migrateLocalPrayerRequestsToFirebase(items)
 
       setFocusItems(normalizeFocusItems(nextItems))
 
@@ -1373,13 +1373,13 @@ function App() {
         speaker: item.speaker,
         theme: item.theme,
         summary: item.summary,
-        source: item.source ?? 'Supabase teaching feed',
+        source: item.source ?? 'Firebase teaching feed',
         link: item.link ?? '',
       })
 
       if (error) {
         setTeachingStatus(getTeachingSyncMessage(error))
-        setTeachingTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+        setTeachingTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
       }
     })
 
@@ -1399,10 +1399,10 @@ function App() {
           speaker: item.speaker,
           theme: item.theme,
           summary: item.summary,
-          source: item.source ?? 'Supabase teaching feed',
+          source: item.source ?? 'Firebase teaching feed',
           link: item.link ?? '',
         })
-        setTeachingStatus('Daily teaching is syncing from Supabase.')
+        setTeachingStatus('Daily teaching is syncing from Firebase.')
         setTeachingTone('neutral')
       },
       (error) => {
@@ -1411,7 +1411,7 @@ function App() {
         }
 
         setTeachingStatus(getTeachingSyncMessage(error))
-        setTeachingTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+        setTeachingTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
       },
     )
 
@@ -1453,7 +1453,7 @@ function App() {
         }
 
         setRequestSyncStatus(getPrayerRequestSyncMessage(error))
-        setRequestSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+        setRequestSyncTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
       },
     )
 
@@ -1480,12 +1480,12 @@ function App() {
 
       if (error) {
         setJournalSyncStatus(getJournalSyncMessage(error))
-        setJournalSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+        setJournalSyncTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
         return
       }
 
       void (async () => {
-        const nextItems = await migrateLocalJournalEntriesToSupabase(items)
+        const nextItems = await migrateLocalJournalEntriesToFirebase(items)
 
         if (!isMounted) {
           return
@@ -1513,7 +1513,7 @@ function App() {
         }
 
         setJournalSyncStatus(getJournalSyncMessage(error))
-        setJournalSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+        setJournalSyncTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
       },
     )
 
@@ -1523,7 +1523,7 @@ function App() {
     }
   }, [sharedJournalEnabled, authUserId])
 
-  const canPreviewRolesLocally = authSession?.provider !== 'supabase'
+  const canPreviewRolesLocally = authSession?.provider !== 'firebase'
   const activeRole = canPreviewRolesLocally ? selectedRole : authSession?.role ?? selectedRole
   const visibleFocusItems = focusItems.filter((item) => {
     if (item.visibilityScope !== 'pastoral') {
@@ -1564,22 +1564,22 @@ function App() {
 
   const effectiveRequestSyncStatus =
     requestSyncStatus ||
-    (!authReady && isSupabaseConfigured
-      ? 'Restoring your Supabase session...'
+    (!authReady && isFirebaseConfigured
+      ? 'Restoring your Firebase session...'
       : sharedPrayerRequestsEnabled
         ? 'Connecting shared requests for signed-in members...'
-        : isSupabaseConfigured
-          ? 'Supabase is configured. Sign in to sync requests across devices.'
+        : isFirebaseConfigured
+          ? 'Firebase is configured. Sign in to sync requests across devices.'
           : 'Requests are currently using local device storage.')
   const effectiveRequestSyncTone = sharedPrayerRequestsEnabled ? requestSyncTone : 'neutral'
   const effectiveJournalSyncStatus =
     journalSyncStatus ||
-    (!authReady && isSupabaseConfigured
-      ? 'Restoring your Supabase session...'
+    (!authReady && isFirebaseConfigured
+      ? 'Restoring your Firebase session...'
       : sharedJournalEnabled
         ? 'Connecting your journal across signed-in devices...'
-        : isSupabaseConfigured
-          ? 'Supabase is configured. Sign in to sync your journal across devices.'
+        : isFirebaseConfigured
+          ? 'Firebase is configured. Sign in to sync your journal across devices.'
           : 'Journal entries are currently using local device storage.')
   const effectiveJournalSyncTone = sharedJournalEnabled ? journalSyncTone : 'neutral'
   const { devotion: dailyDevotion, teaching: dailyTeaching } = homeContent
@@ -1707,7 +1707,7 @@ function App() {
   const canManageTeaching =
     activeRole === 'prayer-core' || activeRole === 'pastor'
   const canManageMembers =
-    authSession?.provider === 'supabase' && (activeRole === 'prayer-core' || activeRole === 'pastor')
+    authSession?.provider === 'firebase' && (activeRole === 'prayer-core' || activeRole === 'pastor')
   const canRemoveRequests =
     !sharedPrayerRequestsEnabled || activeRole === 'pastor' || activeRole === 'prayer-core'
   const canManagePrayerWorkflow = activeRole === 'intercessor' || activeRole === 'pastor' || activeRole === 'prayer-core'
@@ -1822,7 +1822,7 @@ function App() {
 
     if (error) {
       setMemberDirectoryStatus(getMemberDirectorySyncMessage(error))
-      setMemberDirectoryTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+      setMemberDirectoryTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
       setMemberDirectoryBusy(false)
       return
     }
@@ -1844,11 +1844,11 @@ function App() {
 
     if (error) {
       setMemberDirectoryStatus(
-        isTransientSupabaseError(error)
-          ? 'Supabase is unreachable right now, so member roles cannot be changed until the connection returns.'
+        isTransientFirebaseError(error)
+          ? 'Firebase is unreachable right now, so member roles cannot be changed until the connection returns.'
           : `Unable to update this member role: ${error}`,
       )
-      setMemberDirectoryTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+      setMemberDirectoryTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
       setMemberDirectoryBusy(false)
       return
     }
@@ -1907,7 +1907,7 @@ function App() {
 
       if (error) {
         setMemberDirectoryStatus(getMemberDirectorySyncMessage(error))
-        setMemberDirectoryTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+        setMemberDirectoryTone(isTransientFirebaseError(error) ? 'neutral' : 'error')
         setMemberDirectoryBusy(false)
         return
       }
@@ -1950,9 +1950,9 @@ function App() {
       return
     }
 
-    if (supabaseWriteRequiresSignIn) {
-      setAuthNotice('Sign in first so new prayer requests are saved directly to Supabase and synced across devices.')
-      setRequestSyncStatus(getSupabaseSignInRequiredMessage('this prayer request'))
+    if (firebaseWriteRequiresSignIn) {
+      setAuthNotice('Sign in first so new prayer requests are saved directly to Firebase and synced across devices.')
+      setRequestSyncStatus(getFirebaseSignInRequiredMessage('this prayer request'))
       setRequestSyncTone('error')
       return
     }
@@ -1991,19 +1991,19 @@ function App() {
       const { item, error } = await createPrayerRequest(nextFocusItem)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setRequestSyncStatus('Supabase is reconnecting, so this prayer request was not saved to Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setRequestSyncStatus('Firebase is reconnecting, so this prayer request was not saved to Firebase yet.')
           setRequestSyncTone('neutral')
           return
         }
 
-        setRequestSyncStatus(`Unable to save this request to Supabase: ${error}`)
+        setRequestSyncStatus(`Unable to save this request to Firebase: ${error}`)
         setRequestSyncTone('error')
         return
       }
 
       setFocusItems((currentItems) => [item, ...currentItems.filter((entry) => entry.id !== item.id)])
-      setRequestSyncStatus('Prayer request saved to Supabase and syncing across your signed-in devices.')
+      setRequestSyncStatus('Prayer request saved to Firebase and syncing across your signed-in devices.')
       setRequestSyncTone('neutral')
     } else {
       setFocusItems((currentItems) => [nextFocusItem, ...currentItems])
@@ -2111,8 +2111,8 @@ function App() {
     const { session, error } = await savePrayerAppMemberProfile(nextProfile, authSession)
 
     if (error) {
-      if (isTransientSupabaseError(error)) {
-        setMemberProfileStatus('Supabase is reconnecting, so your profile was not saved to Supabase yet.')
+      if (isTransientFirebaseError(error)) {
+        setMemberProfileStatus('Firebase is reconnecting, so your profile was not saved to Firebase yet.')
         setAuthBusy(false)
         return
       }
@@ -2125,8 +2125,8 @@ function App() {
     setMemberProfile(nextProfile)
     setMemberProfileForm(nextProfile)
     setMemberProfileStatus(
-      authSession?.provider === 'supabase'
-        ? 'Member profile saved to your Supabase account.'
+      authSession?.provider === 'firebase'
+        ? 'Member profile saved to your Firebase account.'
         : 'Member profile saved on this device.',
     )
 
@@ -2141,7 +2141,7 @@ function App() {
     event.preventDefault()
 
     if (!canManageTeaching) {
-      setTeachingStatus('Only pastor or prayer-core accounts can save daily preaching to Supabase.')
+      setTeachingStatus('Only pastor or prayer-core accounts can save daily preaching to Firebase.')
       setTeachingTone('error')
       return
     }
@@ -2152,7 +2152,7 @@ function App() {
       speaker: teachingForm.speaker.trim(),
       theme: teachingForm.theme.trim(),
       summary: teachingForm.summary.trim(),
-      source: 'Supabase teaching feed',
+      source: 'Firebase teaching feed',
       link: teachingForm.link.trim(),
     }
 
@@ -2170,9 +2170,9 @@ function App() {
 
     if (!sharedTeachingEnabled) {
       setTeachingStatus(
-        isSupabaseConfigured
-          ? 'Sign in as a pastor or prayer-core account to save daily preaching into Supabase.'
-          : 'Configure Supabase and run the daily_teachings SQL script to manage teachings from the app.',
+        isFirebaseConfigured
+          ? 'Sign in as a pastor or prayer-core account to save daily preaching into Firebase.'
+          : 'Configure Firebase Auth and Firestore to manage teachings from the app.',
       )
       setTeachingTone('error')
       return
@@ -2183,8 +2183,8 @@ function App() {
     const { item, error } = await saveFeaturedTeaching(nextTeaching)
 
     if (error) {
-      if (isTransientSupabaseError(error)) {
-        setTeachingStatus('Supabase is reconnecting, so this teaching was not saved to Supabase yet.')
+      if (isTransientFirebaseError(error)) {
+        setTeachingStatus('Firebase is reconnecting, so this teaching was not saved to Firebase yet.')
         setTeachingTone('neutral')
         setAuthBusy(false)
         return
@@ -2206,10 +2206,10 @@ function App() {
       speaker: item.speaker,
       theme: item.theme,
       summary: item.summary,
-      source: item.source ?? 'Supabase teaching feed',
+      source: item.source ?? 'Firebase teaching feed',
       link: item.link ?? '',
     })
-    setTeachingStatus('Daily teaching saved to Supabase.')
+    setTeachingStatus('Daily teaching saved to Firebase.')
     setTeachingTone('neutral')
     setAuthBusy(false)
   }
@@ -2227,13 +2227,13 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setRequestSyncStatus('Supabase is reconnecting, so this prayer update was not saved to Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setRequestSyncStatus('Firebase is reconnecting, so this prayer update was not saved to Firebase yet.')
           setRequestSyncTone('neutral')
           return
         }
 
-        setRequestSyncStatus(`Unable to update this request in Supabase: ${error}`)
+        setRequestSyncStatus(`Unable to update this request in Firebase: ${error}`)
         setRequestSyncTone('error')
         return
       }
@@ -2256,13 +2256,13 @@ function App() {
       const { error } = await deletePrayerRequest(itemId)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setRequestSyncStatus('Supabase is reconnecting, so this request was not removed from Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setRequestSyncStatus('Firebase is reconnecting, so this request was not removed from Firebase yet.')
           setRequestSyncTone('neutral')
           return
         }
 
-        setRequestSyncStatus(`Unable to remove this request from Supabase: ${error}`)
+        setRequestSyncStatus(`Unable to remove this request from Firebase: ${error}`)
         setRequestSyncTone('error')
         return
       }
@@ -2292,13 +2292,13 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setRequestSyncStatus('Supabase is reconnecting, so this answered update was not saved to Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setRequestSyncStatus('Firebase is reconnecting, so this answered update was not saved to Firebase yet.')
           setRequestSyncTone('neutral')
           return
         }
 
-        setRequestSyncStatus(`Unable to mark this request answered in Supabase: ${error}`)
+        setRequestSyncStatus(`Unable to mark this request answered in Firebase: ${error}`)
         setRequestSyncTone('error')
         return
       }
@@ -2338,13 +2338,13 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setRequestSyncStatus('Supabase is reconnecting, so this prayer was not reopened in Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setRequestSyncStatus('Firebase is reconnecting, so this prayer was not reopened in Firebase yet.')
           setRequestSyncTone('neutral')
           return
         }
 
-        setRequestSyncStatus(`Unable to reopen this request in Supabase: ${error}`)
+        setRequestSyncStatus(`Unable to reopen this request in Firebase: ${error}`)
         setRequestSyncTone('error')
         return
       }
@@ -2398,13 +2398,13 @@ function App() {
         )
       }
 
-      if (isTransientSupabaseError(error)) {
-        setRequestSyncStatus('Supabase is reconnecting, so the answered note was not saved to Supabase yet.')
+      if (isTransientFirebaseError(error)) {
+        setRequestSyncStatus('Firebase is reconnecting, so the answered note was not saved to Firebase yet.')
         setRequestSyncTone('neutral')
         return
       }
 
-      setRequestSyncStatus(`Unable to sync the answered note to Supabase: ${error}`)
+      setRequestSyncStatus(`Unable to sync the answered note to Firebase: ${error}`)
       setRequestSyncTone('error')
     })
   }
@@ -2438,8 +2438,8 @@ function App() {
       const { item, error } = await updatePrayerRequest(itemId, nextItem)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setRequestSyncStatus('Supabase is reconnecting, so the follow-up flag was not saved to Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setRequestSyncStatus('Firebase is reconnecting, so the follow-up flag was not saved to Firebase yet.')
           setRequestSyncTone('neutral')
           return
         }
@@ -2481,9 +2481,9 @@ function App() {
       return
     }
 
-    if (supabaseWriteRequiresSignIn) {
-      setAuthNotice('Sign in first so new journal entries are saved directly to Supabase and restored after restart.')
-      setJournalSyncStatus(getSupabaseSignInRequiredMessage('this journal entry'))
+    if (firebaseWriteRequiresSignIn) {
+      setAuthNotice('Sign in first so new journal entries are saved directly to Firebase and restored after restart.')
+      setJournalSyncStatus(getFirebaseSignInRequiredMessage('this journal entry'))
       setJournalSyncTone('error')
       return
     }
@@ -2499,19 +2499,19 @@ function App() {
       const { item, error } = await createJournalEntry(nextEntry)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setJournalSyncStatus('Supabase is reconnecting, so this journal entry was not saved to Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setJournalSyncStatus('Firebase is reconnecting, so this journal entry was not saved to Firebase yet.')
           setJournalSyncTone('neutral')
           return
         }
 
-        setJournalSyncStatus(`Unable to save this journal entry to Supabase: ${error}`)
+        setJournalSyncStatus(`Unable to save this journal entry to Firebase: ${error}`)
         setJournalSyncTone('error')
         return
       }
 
       setJournalItems((currentEntries) => [item, ...currentEntries.filter((entry) => entry.id !== item.id)])
-      setJournalSyncStatus('Journal entry saved to Supabase and syncing across your signed-in devices.')
+      setJournalSyncStatus('Journal entry saved to Firebase and syncing across your signed-in devices.')
       setJournalSyncTone('neutral')
     } else {
       setJournalItems((currentEntries) => [nextEntry, ...currentEntries])
@@ -2526,13 +2526,13 @@ function App() {
       const { error } = await deleteJournalEntry(entryId)
 
       if (error) {
-        if (isTransientSupabaseError(error)) {
-          setJournalSyncStatus('Supabase is reconnecting, so this journal entry was not removed from Supabase yet.')
+        if (isTransientFirebaseError(error)) {
+          setJournalSyncStatus('Firebase is reconnecting, so this journal entry was not removed from Firebase yet.')
           setJournalSyncTone('neutral')
           return
         }
 
-        setJournalSyncStatus(`Unable to remove this journal entry from Supabase: ${error}`)
+        setJournalSyncStatus(`Unable to remove this journal entry from Firebase: ${error}`)
         setJournalSyncTone('error')
         return
       }
@@ -2548,8 +2548,8 @@ function App() {
     const { item, error } = await updatePrayerRequest(itemId, updates)
 
     if (error) {
-      if (isTransientSupabaseError(error)) {
-        setRequestSyncStatus('Supabase is reconnecting, so this workflow change was not saved to Supabase yet.')
+      if (isTransientFirebaseError(error)) {
+        setRequestSyncStatus('Firebase is reconnecting, so this workflow change was not saved to Firebase yet.')
         setRequestSyncTone('neutral')
         return null
       }
@@ -2923,7 +2923,7 @@ function App() {
       speaker: fallbackTeaching.speaker,
       theme: fallbackTeaching.theme,
       summary: fallbackTeaching.summary,
-      source: 'Supabase teaching feed',
+      source: 'Firebase teaching feed',
       link: '',
     })
     setEmail('')
@@ -2932,7 +2932,7 @@ function App() {
     setAuthError('')
     setAuthNotice(
       error
-        ? `Signed out on this device, but Supabase returned an error: ${error}`
+        ? `Signed out on this device, but Firebase returned an error: ${error}`
         : '',
     )
     setCurrentView('home')
@@ -2954,7 +2954,7 @@ function App() {
         authNotice={authNotice}
         pendingConfirmationEmail={pendingConfirmationEmail}
         authBusy={authBusy}
-        providerConfigured={isSupabaseConfigured}
+        providerConfigured={isFirebaseConfigured}
         onModeChange={(mode) => {
           setAuthMode(mode)
           resetAuthMessages()
@@ -3049,7 +3049,7 @@ function App() {
           ) : null}
           <p className="session-meta">
             {canPreviewRolesLocally
-              ? 'Local role preview is active on this device. Sign in with Supabase to use your live assigned role across devices.'
+              ? 'Local role preview is active on this device. Sign in with Firebase to use your live assigned role across devices.'
               : authSession.email
                 ? `${authSession.email} via ${authSession.provider}`
                 : `Signed in ${authSession.signedInAt}`}

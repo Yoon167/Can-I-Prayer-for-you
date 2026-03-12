@@ -1,44 +1,51 @@
 import { getDayIndex, teachingLibrary } from '../data/dailyContent.js'
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
 import {
-  createResilientRealtimeSubscription,
-  normalizeSupabaseSyncError,
-  retrySupabaseOperation,
-} from './supabaseSyncUtils.js'
+  collection,
+  doc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  setDoc,
+  where,
+} from 'firebase/firestore'
+import { firebaseDb, isFirebaseConfigured } from '../lib/firebaseClient.js'
+import { createFirestoreSubscription, normalizeFirebaseSyncError } from './firebaseSyncUtils.js'
 
-const dailyTeachingsTable = 'daily_teachings'
+const dailyTeachingsCollection = 'daily_teachings'
 
 function getTodayDateKey(date = new Date()) {
   return date.toISOString().slice(0, 10)
 }
 
-function normalizeTeachingRow(row) {
+function normalizeTeachingRecord(record, id) {
   return {
-    id: row.id,
-    publishDate: row.publish_date,
-    title: row.title ?? '',
-    speaker: row.speaker ?? '',
-    theme: row.theme ?? '',
-    summary: row.summary ?? '',
-    source: row.source ?? 'Supabase teaching feed',
+    id,
+    publishDate: record.publishDate,
+    title: record.title ?? '',
+    speaker: record.speaker ?? '',
+    theme: record.theme ?? '',
+    summary: record.summary ?? '',
+    source: record.source ?? 'Firebase teaching feed',
     isLive: true,
-    link: row.link ?? null,
+    link: record.link ?? null,
   }
 }
 
 function buildTeachingPayload(teaching) {
   return {
-    publish_date: teaching.publishDate,
+    publishDate: teaching.publishDate,
     title: teaching.title,
     speaker: teaching.speaker,
     theme: teaching.theme,
     summary: teaching.summary,
     source: teaching.source,
     link: teaching.link ?? null,
+    updatedAt: new Date().toISOString(),
   }
 }
 
-export const isTeachingSyncConfigured = isSupabaseConfigured
+export const isTeachingSyncConfigured = isFirebaseConfigured
 
 export function getFallbackTeaching(date = new Date()) {
   const teaching = teachingLibrary[getDayIndex(date, teachingLibrary.length)]
@@ -53,73 +60,62 @@ export function getFallbackTeaching(date = new Date()) {
 }
 
 export async function getFeaturedTeaching(date = new Date()) {
-  if (!supabase || !isTeachingSyncConfigured) {
+  if (!firebaseDb || !isTeachingSyncConfigured) {
     return { item: getFallbackTeaching(date), error: null }
   }
 
   try {
     const todayKey = getTodayDateKey(date)
-    const { data, error } = await retrySupabaseOperation(
-      async () =>
-        supabase
-          .from(dailyTeachingsTable)
-          .select('id, publish_date, title, speaker, theme, summary, source, link')
-          .lte('publish_date', todayKey)
-          .order('publish_date', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      supabase,
+    const snapshot = await getDocs(
+      query(
+        collection(firebaseDb, dailyTeachingsCollection),
+        where('publishDate', '<=', todayKey),
+        orderBy('publishDate', 'desc'),
+        limit(1),
+      ),
     )
 
-    if (error) {
-      return { item: getFallbackTeaching(date), error: normalizeSupabaseSyncError(error, 'daily teaching') }
-    }
-
-    if (!data) {
+    if (snapshot.empty) {
       return { item: getFallbackTeaching(date), error: null }
     }
 
-    return { item: normalizeTeachingRow(data), error: null }
+    const documentSnapshot = snapshot.docs[0]
+    return { item: normalizeTeachingRecord(documentSnapshot.data(), documentSnapshot.id), error: null }
   } catch (error) {
-    return { item: getFallbackTeaching(date), error: normalizeSupabaseSyncError(error, 'daily teaching') }
+    return { item: getFallbackTeaching(date), error: normalizeFirebaseSyncError(error, 'daily teaching') }
   }
 }
 
 export async function saveFeaturedTeaching(teaching) {
-  if (!supabase || !isTeachingSyncConfigured) {
+  if (!firebaseDb || !isTeachingSyncConfigured) {
     return { item: { ...teaching, isLive: false }, error: null }
   }
 
   try {
-    const { data, error } = await retrySupabaseOperation(
-      async () =>
-        supabase
-          .from(dailyTeachingsTable)
-          .upsert(buildTeachingPayload(teaching), { onConflict: 'publish_date' })
-          .select('id, publish_date, title, speaker, theme, summary, source, link')
-          .single(),
-      supabase,
-    )
+    const documentId = teaching.publishDate
+    const payload = buildTeachingPayload(teaching)
+    await setDoc(doc(firebaseDb, dailyTeachingsCollection, documentId), payload, { merge: true })
 
-    if (error) {
-      return { item: null, error: normalizeSupabaseSyncError(error, 'daily teaching') }
-    }
-
-    return { item: normalizeTeachingRow(data), error: null }
+    return { item: normalizeTeachingRecord(payload, documentId), error: null }
   } catch (error) {
-    return { item: null, error: normalizeSupabaseSyncError(error, 'daily teaching') }
+    return { item: null, error: normalizeFirebaseSyncError(error, 'daily teaching') }
   }
 }
 
 export function subscribeToFeaturedTeaching(onItemChange, onError) {
-  if (!supabase || !isTeachingSyncConfigured) {
+  if (!firebaseDb || !isTeachingSyncConfigured) {
     return () => {}
   }
 
-  return createResilientRealtimeSubscription({
-    supabaseClient: supabase,
-    channelName: 'daily-teachings-sync',
-    table: dailyTeachingsTable,
+  const todayKey = getTodayDateKey(new Date())
+
+  return createFirestoreSubscription({
+    queryRef: query(
+      collection(firebaseDb, dailyTeachingsCollection),
+      where('publishDate', '<=', todayKey),
+      orderBy('publishDate', 'desc'),
+      limit(1),
+    ),
     resourceLabel: 'daily teaching',
     loadLatest: getFeaturedTeaching,
     onData: ({ item }) => onItemChange(item),
