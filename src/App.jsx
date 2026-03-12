@@ -285,6 +285,14 @@ function canUseNativeTextToSpeech() {
   return Capacitor.isNativePlatform() && Capacitor.getPlatform() !== 'web'
 }
 
+function canRunPublishedUpdateChecks() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return !Capacitor.isNativePlatform()
+}
+
 function App() {
   const currentBuildId = import.meta.env.VITE_APP_BUILD_ID || 'dev-local'
   const [authReady, setAuthReady] = useState(() => !isSupabaseConfigured)
@@ -418,6 +426,7 @@ function App() {
   const swipeStartXRef = useRef(null)
   const swipePointerIdRef = useRef(null)
   const previousFocusItemsRef = useRef(null)
+  const prayerRequestRefreshInFlightRef = useRef(null)
   const authUserId = authSession?.userId ?? ''
 
   const addAppNotification = useCallback(
@@ -1019,6 +1028,10 @@ function App() {
   }, [authSession, playWelcomeVoice, welcomeVoiceEnabled])
 
   useEffect(() => {
+    if (!canRunPublishedUpdateChecks()) {
+      return undefined
+    }
+
     const refreshMarkerKey = 'prayer-app-refreshed-build-id'
     let isMounted = true
 
@@ -1051,9 +1064,9 @@ function App() {
 
         window.sessionStorage.setItem(refreshMarkerKey, publishedBuildId)
 
-        const nextUrl = new URL(window.location.href)
-        nextUrl.searchParams.set('v', publishedBuildId)
-        window.location.replace(nextUrl.toString())
+        setAuthNotice(
+          'A newer app version is available. Refresh the page when you are ready to update.',
+        )
       } catch {
         // Ignore version checks when the manifest cannot be reached.
       }
@@ -1205,25 +1218,37 @@ function App() {
   const sharedTeachingEnabled = isTeachingSyncConfigured && authSession?.provider === 'supabase'
 
   const refreshSharedPrayerRequests = useEffectEvent(async ({ preserveStatus = false } = {}) => {
-    const { items, error } = await listPrayerRequests()
+    if (prayerRequestRefreshInFlightRef.current) {
+      return prayerRequestRefreshInFlightRef.current
+    }
 
-    if (error) {
-      if (!preserveStatus) {
-        setRequestSyncStatus(getPrayerRequestSyncMessage(error))
-        setRequestSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+    prayerRequestRefreshInFlightRef.current = (async () => {
+      const { items, error } = await listPrayerRequests()
+
+      if (error) {
+        if (!preserveStatus) {
+          setRequestSyncStatus(getPrayerRequestSyncMessage(error))
+          setRequestSyncTone(isTransientSupabaseError(error) ? 'neutral' : 'error')
+        }
+
+        return false
       }
 
-      return false
+      setFocusItems(normalizeFocusItems(items))
+
+      if (!preserveStatus) {
+        setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
+        setRequestSyncTone('neutral')
+      }
+
+      return true
+    })()
+
+    try {
+      return await prayerRequestRefreshInFlightRef.current
+    } finally {
+      prayerRequestRefreshInFlightRef.current = null
     }
-
-    setFocusItems(normalizeFocusItems(items))
-
-    if (!preserveStatus) {
-      setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
-      setRequestSyncTone('neutral')
-    }
-
-    return true
   })
 
   useEffect(() => {
@@ -1302,7 +1327,6 @@ function App() {
     }
 
     let isMounted = true
-    let refreshTimer = null
     let initialRefreshTimer = null
 
     initialRefreshTimer = window.setTimeout(() => {
@@ -1312,14 +1336,6 @@ function App() {
 
       refreshSharedPrayerRequests()
     }, 0)
-
-    const handleWindowFocus = () => {
-      if (!isMounted) {
-        return
-      }
-
-      refreshSharedPrayerRequests({ preserveStatus: true })
-    }
 
     const unsubscribe = subscribeToPrayerRequests(
       (items) => {
@@ -1341,25 +1357,11 @@ function App() {
       },
     )
 
-    refreshTimer = window.setInterval(() => {
-      if (!isMounted) {
-        return
-      }
-
-      refreshSharedPrayerRequests({ preserveStatus: true })
-    }, 15000)
-
-    window.addEventListener('focus', handleWindowFocus)
-
     return () => {
       isMounted = false
       if (initialRefreshTimer) {
         window.clearTimeout(initialRefreshTimer)
       }
-      if (refreshTimer) {
-        window.clearInterval(refreshTimer)
-      }
-      window.removeEventListener('focus', handleWindowFocus)
       unsubscribe()
     }
   }, [sharedPrayerRequestsEnabled, authUserId])

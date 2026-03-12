@@ -83,6 +83,8 @@ export function createResilientRealtimeSubscription({
   let currentStatus = 'CLOSED'
   let reconnectTimer = null
   let reconnectAttempt = 0
+  let refreshInFlight = null
+  let refreshQueued = false
 
   function clearReconnectTimer() {
     if (reconnectTimer) {
@@ -92,15 +94,33 @@ export function createResilientRealtimeSubscription({
   }
 
   async function refreshLatest() {
-    const result = await loadLatest()
-
-    if (result?.error) {
-      onError?.(result.error)
-      return false
+    if (refreshInFlight) {
+      refreshQueued = true
+      return refreshInFlight
     }
 
-    onData(result)
-    return true
+    refreshInFlight = (async () => {
+      const result = await loadLatest()
+
+      if (result?.error) {
+        onError?.(result.error)
+        return false
+      }
+
+      onData(result)
+      return true
+    })()
+
+    try {
+      return await refreshInFlight
+    } finally {
+      refreshInFlight = null
+
+      if (refreshQueued && isActive) {
+        refreshQueued = false
+        void refreshLatest()
+      }
+    }
   }
 
   function detachCurrentChannel() {
