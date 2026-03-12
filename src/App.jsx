@@ -195,6 +195,8 @@ const welcomeVoiceEnabledStorageKey = 'prayer-app-welcome-voice-enabled'
 const welcomeVoiceSessionKey = 'prayer-app-welcome-voice-played'
 const welcomeVoiceMessage =
   'Welcome to Pray for You. Your prayer community is ready for new requests, praise reports, and prayer updates.'
+const demoFocusItemIds = new Set(prayerFocus.map((item) => item.id))
+const demoJournalEntryIds = new Set(journalEntries.map((entry) => entry.id))
 const notificationTypeLabels = {
   request: 'Prayer request',
   answered: 'Answered prayer',
@@ -427,6 +429,8 @@ function App() {
   const swipePointerIdRef = useRef(null)
   const previousFocusItemsRef = useRef(null)
   const prayerRequestRefreshInFlightRef = useRef(null)
+  const prayerRequestMigrationAttemptedRef = useRef(false)
+  const journalMigrationAttemptedRef = useRef(false)
   const authUserId = authSession?.userId ?? ''
 
   const addAppNotification = useCallback(
@@ -929,6 +933,8 @@ function App() {
 
   useEffect(() => {
     previousFocusItemsRef.current = null
+    prayerRequestMigrationAttemptedRef.current = false
+    journalMigrationAttemptedRef.current = false
   }, [authUserId])
 
   useEffect(() => {
@@ -1217,6 +1223,93 @@ function App() {
   const sharedJournalEnabled = isJournalSyncConfigured && authSession?.provider === 'supabase'
   const sharedTeachingEnabled = isTeachingSyncConfigured && authSession?.provider === 'supabase'
 
+  const migrateLocalPrayerRequestsToSupabase = useEffectEvent(async (remoteItems) => {
+    if (prayerRequestMigrationAttemptedRef.current || remoteItems.length > 0) {
+      return remoteItems
+    }
+
+    prayerRequestMigrationAttemptedRef.current = true
+
+    const localOnlyItems = normalizeFocusItems(focusItems).filter((item) => !demoFocusItemIds.has(item.id))
+
+    if (localOnlyItems.length === 0) {
+      return remoteItems
+    }
+
+    let migratedCount = 0
+
+    for (const item of localOnlyItems) {
+      const nextItem = {
+        ...item,
+        ownerUserId: item.ownerUserId ?? authUserId ?? null,
+      }
+
+      const { error } = await createPrayerRequest(nextItem)
+
+      if (!error) {
+        migratedCount += 1
+      }
+    }
+
+    if (migratedCount === 0) {
+      return remoteItems
+    }
+
+    const { items, error } = await listPrayerRequests()
+
+    if (error) {
+      return remoteItems
+    }
+
+    setRequestSyncStatus(
+      `Recovered ${migratedCount} local prayer ${migratedCount === 1 ? 'request' : 'requests'} into your signed-in account.`,
+    )
+    setRequestSyncTone('neutral')
+
+    return items
+  })
+
+  const migrateLocalJournalEntriesToSupabase = useEffectEvent(async (remoteItems) => {
+    if (journalMigrationAttemptedRef.current || remoteItems.length > 0) {
+      return remoteItems
+    }
+
+    journalMigrationAttemptedRef.current = true
+
+    const localOnlyEntries = journalItems.filter((entry) => !demoJournalEntryIds.has(entry.id))
+
+    if (localOnlyEntries.length === 0) {
+      return remoteItems
+    }
+
+    let migratedCount = 0
+
+    for (const entry of localOnlyEntries) {
+      const { error } = await createJournalEntry(entry)
+
+      if (!error) {
+        migratedCount += 1
+      }
+    }
+
+    if (migratedCount === 0) {
+      return remoteItems
+    }
+
+    const { items, error } = await listJournalEntries()
+
+    if (error) {
+      return remoteItems
+    }
+
+    setJournalSyncStatus(
+      `Recovered ${migratedCount} local journal ${migratedCount === 1 ? 'entry' : 'entries'} into your signed-in account.`,
+    )
+    setJournalSyncTone('neutral')
+
+    return items
+  })
+
   const refreshSharedPrayerRequests = useEffectEvent(async ({ preserveStatus = false } = {}) => {
     if (prayerRequestRefreshInFlightRef.current) {
       return prayerRequestRefreshInFlightRef.current
@@ -1234,7 +1327,9 @@ function App() {
         return false
       }
 
-      setFocusItems(normalizeFocusItems(items))
+      const nextItems = await migrateLocalPrayerRequestsToSupabase(items)
+
+      setFocusItems(normalizeFocusItems(nextItems))
 
       if (!preserveStatus) {
         setRequestSyncStatus('Shared requests are syncing across signed-in devices.')
@@ -1384,9 +1479,17 @@ function App() {
         return
       }
 
-      setJournalItems(items)
-      setJournalSyncStatus('Your journal is syncing across signed-in devices.')
-      setJournalSyncTone('neutral')
+      void (async () => {
+        const nextItems = await migrateLocalJournalEntriesToSupabase(items)
+
+        if (!isMounted) {
+          return
+        }
+
+        setJournalItems(nextItems)
+        setJournalSyncStatus('Your journal is syncing across signed-in devices.')
+        setJournalSyncTone('neutral')
+      })()
     })
 
     const unsubscribe = subscribeToJournalEntries(
