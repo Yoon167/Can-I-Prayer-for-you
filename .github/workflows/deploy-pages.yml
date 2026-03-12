@@ -21,8 +21,6 @@ jobs:
     env:
       VITE_APP_BUILD_ID: ${{ github.sha }}
       VITE_APP_DEPLOYED_AT: ${{ github.run_id }}-${{ github.run_attempt }}
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || '' }}
-      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,23 +33,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-
-      - name: Resolve Supabase secrets (optional)
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: |
-          if [ -z "$VITE_SUPABASE_URL" ] && [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "Supabase secrets not set; building in local-only demo mode."
-            exit 0
-          fi
-
-          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_ANON_KEY" ]; then
-            echo "Both VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set to enable Supabase sync."
-            exit 1
-          fi
-
-          echo "Supabase secrets detected; build will include Supabase integration."
 
       - name: Build app
         run: npm run build

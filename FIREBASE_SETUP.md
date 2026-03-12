@@ -103,7 +103,3 @@ After the web config variables are available to your build:
 1. Run `npm run build`.
 2. Deploy the built app.
 3. Confirm your deployed domain is listed in Firebase Auth authorized domains.
-
-## 8. Migrate existing Supabase data
-
-If you already have live data in Supabase, use [MIGRATE_SUPABASE_TO_FIREBASE.md](MIGRATE_SUPABASE_TO_FIREBASE.md) before cutting users over to Firebase.

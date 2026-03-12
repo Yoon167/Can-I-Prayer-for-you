@@ -9,7 +9,6 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "provision:user": "node scripts/provision-firebase-user.mjs",
-    "migrate:supabase": "node scripts/migrate-supabase-to-firebase.mjs",
     "cap:sync": "npm run build && npx cap sync",
     "android:sync": "npm run build && npx cap sync android",
     "android:open": "npx cap open android",
@@ -26,7 +25,6 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "@supabase/supabase-js": "^2.57.4",
     "@capacitor/cli": "^8.2.0",
     "@eslint/js": "^9.39.1",
     "@types/react": "^19.2.7",

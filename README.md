@@ -45,38 +45,12 @@ The script accepts either:
 - `GOOGLE_APPLICATION_CREDENTIALS`
 - or `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`
 
-## Migrate existing Supabase data
-
-If you already have production data in Supabase, use [MIGRATE_SUPABASE_TO_FIREBASE.md](MIGRATE_SUPABASE_TO_FIREBASE.md).
-
-The migration script copies:
-
-- auth users into Firebase Auth with a temporary password
-- `member_accounts` into Firestore
-- `prayer_requests` into Firestore
-- `journal_entries` into Firestore
-- `daily_teachings` into Firestore
-
 ## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
-
-## Android
-
-to authenticated
-with check (auth.uid() = user_id);
-
-create policy "Users can delete their own journal entries"
-on public.journal_entries
-for delete
-to authenticated
-using (auth.uid() = user_id);
-```
-
-If the table is missing, the journal stays usable with local-only browser storage.
 
 ## Checks
 
