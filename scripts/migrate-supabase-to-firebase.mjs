@@ -2,7 +2,11 @@ import { createClient } from '@supabase/supabase-js'
 import { applicationDefault, cert, getApp, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
+import { config as loadEnvFile } from 'dotenv'
 import fs from 'node:fs/promises'
+
+loadEnvFile({ path: '.env' })
+loadEnvFile({ path: '.env.local', override: true })
 
 const validRoles = new Set(['member', 'intercessor', 'pastor', 'prayer-core'])
 const authPageSize = 100

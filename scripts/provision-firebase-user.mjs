@@ -1,6 +1,10 @@
 import { applicationDefault, cert, getApp, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore } from 'firebase-admin/firestore'
+import { config as loadEnvFile } from 'dotenv'
+
+loadEnvFile({ path: '.env' })
+loadEnvFile({ path: '.env.local', override: true })
 
 const validRoles = new Set(['intercessor', 'pastor', 'prayer-core'])
 

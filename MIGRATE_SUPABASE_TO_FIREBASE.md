@@ -42,6 +42,8 @@ FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 ```
 
+The migration script now reads `.env` and `.env.local` automatically, so you can place these values in a local env file instead of exporting them manually in PowerShell.
+
 ## Run the migration
 
 ```bash
