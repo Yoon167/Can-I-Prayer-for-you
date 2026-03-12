@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core'
+import { TextToSpeech } from '@capacitor-community/text-to-speech'
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import './App.css'
 import AnsweredPrayersPanel from './components/AnsweredPrayersPanel.jsx'
@@ -191,6 +193,8 @@ const defaultMemberProfile = {
 const notificationStorageKey = 'prayer-app-notifications'
 const welcomeVoiceEnabledStorageKey = 'prayer-app-welcome-voice-enabled'
 const welcomeVoiceSessionKey = 'prayer-app-welcome-voice-played'
+const welcomeVoiceMessage =
+  'Welcome to Pray for You. Your prayer community is ready for new requests, praise reports, and prayer updates.'
 const notificationTypeLabels = {
   request: 'Prayer request',
   answered: 'Answered prayer',
@@ -275,6 +279,10 @@ function selectPreferredVoice(voices) {
     voices.find((voice) => voice.lang?.toLowerCase?.().startsWith('en')) ??
     voices[0]
   )
+}
+
+function canUseNativeTextToSpeech() {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() !== 'web'
 }
 
 function App() {
@@ -631,33 +639,54 @@ function App() {
   }, [])
 
   const playWelcomeVoice = useCallback(
-    (forceReplay = false) => {
-      if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') {
-        return
-      }
-
+    async (forceReplay = false) => {
       if (!welcomeVoiceEnabled && !forceReplay) {
-        return
+        return false
       }
 
-      const utterance = new SpeechSynthesisUtterance(
-        'Welcome to Pray for You. Your prayer community is ready for new requests, praise reports, and prayer updates.',
-      )
-      const preferredVoice = selectPreferredVoice(window.speechSynthesis.getVoices())
+      try {
+        if (canUseNativeTextToSpeech()) {
+          try {
+            await TextToSpeech.stop()
+          } catch {
+            // Ignore stop failures and try to speak anyway.
+          }
 
-      if (preferredVoice) {
-        utterance.voice = preferredVoice
-        utterance.lang = preferredVoice.lang || 'en-US'
-      } else {
-        utterance.lang = 'en-US'
+          await TextToSpeech.speak({
+            text: welcomeVoiceMessage,
+            lang: 'en-US',
+            rate: 1,
+            pitch: 1,
+            volume: 1,
+          })
+
+          return true
+        }
+
+        if (typeof window === 'undefined' || typeof window.speechSynthesis === 'undefined') {
+          return false
+        }
+
+        const utterance = new SpeechSynthesisUtterance(welcomeVoiceMessage)
+        const preferredVoice = selectPreferredVoice(window.speechSynthesis.getVoices())
+
+        if (preferredVoice) {
+          utterance.voice = preferredVoice
+          utterance.lang = preferredVoice.lang || 'en-US'
+        } else {
+          utterance.lang = 'en-US'
+        }
+
+        utterance.rate = 1.01
+        utterance.pitch = 1
+        utterance.volume = 0.9
+
+        window.speechSynthesis.cancel()
+        window.speechSynthesis.speak(utterance)
+        return true
+      } catch {
+        return false
       }
-
-      utterance.rate = 1.01
-      utterance.pitch = 1
-      utterance.volume = 0.9
-
-      window.speechSynthesis.cancel()
-      window.speechSynthesis.speak(utterance)
     },
     [welcomeVoiceEnabled],
   )
@@ -971,12 +1000,20 @@ function App() {
       return undefined
     }
 
+    let isMounted = true
+
     const timerId = window.setTimeout(() => {
-      playWelcomeVoice()
-      window.sessionStorage.setItem(welcomeVoiceSessionKey, 'played')
+      void (async () => {
+        const didPlay = await playWelcomeVoice()
+
+        if (isMounted && didPlay) {
+          window.sessionStorage.setItem(welcomeVoiceSessionKey, 'played')
+        }
+      })()
     }, 900)
 
     return () => {
+      isMounted = false
       window.clearTimeout(timerId)
     }
   }, [authSession, playWelcomeVoice, welcomeVoiceEnabled])
@@ -1376,7 +1413,8 @@ function App() {
     }
   }, [sharedJournalEnabled, authUserId])
 
-  const activeRole = authSession?.role ?? selectedRole
+  const canPreviewRolesLocally = authSession?.provider !== 'supabase'
+  const activeRole = canPreviewRolesLocally ? selectedRole : authSession?.role ?? selectedRole
   const visibleFocusItems = focusItems.filter((item) => {
     if (item.visibilityScope !== 'pastoral') {
       return true
@@ -2831,7 +2869,9 @@ function App() {
         notificationPermission={browserNotificationPermission}
         welcomeVoiceEnabled={welcomeVoiceEnabled}
         onToggleWelcomeVoice={handleToggleWelcomeVoice}
-        onReplayWelcomeVoice={() => playWelcomeVoice(true)}
+        onReplayWelcomeVoice={() => {
+          void playWelcomeVoice(true)
+        }}
       />
 
       {canInstallApp ? (
@@ -2864,8 +2904,27 @@ function App() {
         </div>
 
         <div className="role-switcher">
+          {canPreviewRolesLocally ? (
+            <div className="role-chip-group" role="tablist" aria-label="Local role preview">
+              {roleOptions.map((role) => (
+                <button
+                  key={role.id}
+                  type="button"
+                  className={activeRole === role.id ? 'role-chip role-chip-active' : 'role-chip'}
+                  onClick={() => setSelectedRole(role.id)}
+                  aria-pressed={activeRole === role.id}
+                >
+                  {role.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <p className="session-meta">
-            {authSession.email ? `${authSession.email} via ${authSession.provider}` : `Signed in ${authSession.signedInAt}`}
+            {canPreviewRolesLocally
+              ? 'Local role preview is active on this device. Sign in with Supabase to use your live assigned role across devices.'
+              : authSession.email
+                ? `${authSession.email} via ${authSession.provider}`
+                : `Signed in ${authSession.signedInAt}`}
           </p>
           <button type="button" className="ghost-action" onClick={handleSignOut} disabled={authBusy}>
             Sign out

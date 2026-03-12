@@ -1,9 +1,9 @@
 .app-shell {
   position: relative;
   z-index: 1;
-  width: min(1120px, calc(100% - 1rem));
+  width: min(1220px, calc(100% - 2rem));
   margin: 0 auto;
-  padding: 5.6rem 0 8rem;
+  padding: 6rem 0 8rem;
 }
 
 .app-navbar {
@@ -16,12 +16,12 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
-  width: min(940px, calc(100% - 1rem));
+  width: min(1160px, calc(100% - 2rem));
   padding: 0.7rem 0.9rem;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(215, 219, 228, 0.95);
-  box-shadow: 0 18px 48px rgba(17, 24, 39, 0.08);
+  background: rgba(255, 251, 245, 0.84);
+  border: 1px solid rgba(245, 228, 204, 0.72);
+  box-shadow: 0 20px 56px rgba(17, 24, 39, 0.12);
   backdrop-filter: blur(18px);
 }
 
@@ -189,7 +189,7 @@
   overflow: auto;
   border-radius: 24px;
   border: 1px solid rgba(228, 231, 238, 0.96);
-  background: rgba(255, 255, 255, 0.98);
+  background: rgba(255, 252, 248, 0.96);
   box-shadow: 0 22px 60px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(18px);
   transform: translateY(-10px);
@@ -366,20 +366,24 @@
   min-height: 100vh;
   display: grid;
   place-items: center;
-  width: min(1180px, calc(100% - 2rem));
+  width: min(1220px, calc(100% - 2rem));
   margin: 0 auto;
   padding: 2rem 0 4rem;
 }
 
 .auth-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  align-items: start;
   gap: 1.5rem;
-  width: min(900px, 100%);
-  padding: 1.3rem;
-  border-radius: 30px;
-  background: rgba(255, 250, 244, 0.74);
-  border: 1px solid rgba(118, 85, 42, 0.13);
-  box-shadow: 0 20px 56px rgba(72, 48, 22, 0.1);
+  width: min(1080px, 100%);
+  padding: 1.5rem;
+  border-radius: 32px;
+  background:
+    linear-gradient(180deg, rgba(255, 251, 245, 0.8), rgba(253, 247, 238, 0.68)),
+    rgba(255, 250, 244, 0.74);
+  border: 1px solid rgba(255, 232, 204, 0.24);
+  box-shadow: 0 24px 72px rgba(9, 16, 26, 0.18);
   backdrop-filter: blur(18px);
 }
 
@@ -430,7 +434,7 @@
   min-height: 100vh;
   display: grid;
   place-items: center;
-  width: min(1180px, calc(100% - 2rem));
+  width: min(1220px, calc(100% - 2rem));
   margin: 0 auto;
   padding: 2rem 0 4rem;
 }
@@ -439,13 +443,15 @@
   display: grid;
   justify-items: center;
   gap: 1rem;
-  width: min(620px, 100%);
-  padding: 1.7rem;
+  width: min(720px, 100%);
+  padding: 2rem;
   text-align: center;
   border-radius: 32px;
-  background: rgba(255, 250, 244, 0.76);
-  border: 1px solid rgba(118, 85, 42, 0.13);
-  box-shadow: 0 20px 54px rgba(72, 48, 22, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 251, 245, 0.82), rgba(253, 247, 238, 0.72)),
+    rgba(255, 250, 244, 0.76);
+  border: 1px solid rgba(255, 232, 204, 0.26);
+  box-shadow: 0 24px 72px rgba(9, 16, 26, 0.18);
   backdrop-filter: blur(18px);
 }
 
@@ -618,6 +624,13 @@
   gap: 0.7rem;
 }
 
+.role-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .role-chip {
   padding: 0.8rem 1rem;
   border: 1px solid rgba(118, 85, 42, 0.16);
@@ -641,22 +654,22 @@
 .hero-panel,
 .panel {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 252, 254, 0.92)),
+    linear-gradient(180deg, rgba(255, 252, 248, 0.9), rgba(250, 244, 236, 0.8)),
     rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(224, 227, 235, 0.96);
-  box-shadow: 0 20px 52px rgba(15, 23, 42, 0.07);
+  border: 1px solid rgba(247, 231, 212, 0.72);
+  box-shadow: 0 24px 70px rgba(9, 16, 26, 0.14);
   backdrop-filter: blur(14px);
 }
 
 .hero-panel {
   display: grid;
-  grid-template-columns: 1.2fr 0.9fr;
+  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.88fr);
   gap: 1rem;
-  padding: 1.2rem;
-  border-radius: 28px;
+  padding: 1.35rem;
+  border-radius: 30px;
   background:
-    radial-gradient(circle at top left, rgba(255, 221, 236, 0.58), transparent 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 249, 252, 0.92)),
+    radial-gradient(circle at top left, rgba(245, 203, 137, 0.42), transparent 32%),
+    linear-gradient(180deg, rgba(255, 252, 248, 0.94), rgba(248, 241, 232, 0.84)),
     rgba(255, 255, 255, 0.92);
   animation: rise-in 700ms ease;
 }
@@ -740,8 +753,8 @@
   border-radius: 24px;
   color: #fff8ef;
   background:
-    radial-gradient(circle at top, rgba(255, 255, 255, 0.18), transparent 38%),
-    linear-gradient(180deg, #9b2f64, #5f6ad4);
+    linear-gradient(180deg, rgba(12, 28, 45, 0.16), rgba(12, 28, 45, 0.42)),
+    linear-gradient(135deg, #435f57, #a15b32);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
@@ -809,7 +822,7 @@
 .home-summary-grid,
 .profile-grid-cards,
 .analytics-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .analytics-panel {
@@ -860,7 +873,7 @@
   padding: 0.92rem;
   border-radius: 22px;
   border: 1px solid rgba(228, 231, 238, 0.96);
-  background: rgba(250, 251, 255, 0.95);
+  background: rgba(255, 252, 248, 0.88);
 }
 
 .home-summary-card .metric-value {
@@ -893,15 +906,7 @@
 }
 
 .home-summary-grid {
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(118px, 1fr);
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-  scrollbar-width: none;
-}
-
-.home-summary-grid::-webkit-scrollbar {
-  display: none;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .home-content-status {
@@ -949,7 +954,7 @@
 }
 
 .panel {
-  padding: 1.05rem;
+  padding: 1.15rem;
   border-radius: 22px;
   animation: rise-in 760ms ease;
 }
@@ -1766,10 +1771,8 @@
 }
 
 @media (max-width: 1024px) {
-  .app-navbar,
   .auth-field-grid,
   .auth-field-grid-wide,
-  .role-shell,
   .hero-panel,
   .content-grid,
   .moment-list,
@@ -1784,9 +1787,14 @@
     grid-template-columns: 1fr;
   }
 
+  .auth-panel,
+  .role-shell {
+    grid-template-columns: 1fr;
+  }
+
   .app-navbar {
     top: 0.75rem;
-    width: calc(100% - 1rem);
+    width: calc(100% - 1.5rem);
     flex-direction: row;
     align-items: center;
   }
@@ -1805,6 +1813,10 @@
     justify-content: flex-start;
   }
 
+  .role-chip-group {
+    justify-content: flex-start;
+  }
+
   .session-meta {
     max-width: 100%;
   }
@@ -1820,6 +1832,10 @@
 
   .hero-copy h1 {
     max-width: 14ch;
+  }
+
+  .home-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1903,6 +1919,26 @@
 
   .notification-bell-copy {
     display: none;
+  }
+
+  body {
+    background-attachment: scroll;
+    background-position: center top;
+  }
+
+  .home-summary-grid,
+  .analytics-grid,
+  .profile-grid-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .role-chip-group {
+    width: 100%;
+  }
+
+  .role-chip {
+    flex: 1 1 calc(50% - 0.5rem);
+    text-align: center;
   }
 
   .notification-panel {
