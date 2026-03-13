@@ -364,8 +364,38 @@ function getFirebaseSignInRequiredMessage(resourceLabel) {
   return `Sign in to your Firebase-backed account before saving ${resourceLabel}.`
 }
 
+function formatBuildTimestamp(timestamp) {
+  if (!timestamp) {
+    return 'Unknown deploy time'
+  }
+
+  try {
+    return new Date(timestamp).toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  } catch {
+    return 'Unknown deploy time'
+  }
+}
+
+function BuildBadge({ buildId, deployedAt }) {
+  const shortBuildId = buildId === 'dev-local' ? buildId : buildId.slice(0, 8)
+
+  return (
+    <aside className="build-badge" aria-label="Current app build">
+      <p className="build-badge-label">Build</p>
+      <strong>{shortBuildId}</strong>
+      <span>{formatBuildTimestamp(deployedAt)}</span>
+    </aside>
+  )
+}
+
 function App() {
   const currentBuildId = import.meta.env.VITE_APP_BUILD_ID || 'dev-local'
+  const deployedAt = import.meta.env.VITE_APP_DEPLOYED_AT || ''
   const [authReady, setAuthReady] = useState(() => !isFirebaseConfigured)
   const [authSession, setAuthSession] = useState(() => {
     if (typeof window === 'undefined') {
@@ -3132,46 +3162,50 @@ function App() {
 
   if (!authSession) {
     return (
-      <AuthPanel
-        authMode={authMode}
-        email={email}
-        password={password}
-        signUpForm={signUpForm}
-        authError={authError}
-        authNotice={authNotice}
-        pendingConfirmationEmail={pendingConfirmationEmail}
-        authBusy={authBusy}
-        providerConfigured={isFirebaseConfigured}
-        onModeChange={(mode) => {
-          setAuthMode(mode)
-          resetAuthMessages()
-        }}
-        onEmailChange={(value) => {
-          setEmail(value)
+      <>
+        <AuthPanel
+          authMode={authMode}
+          email={email}
+          password={password}
+          signUpForm={signUpForm}
+          authError={authError}
+          authNotice={authNotice}
+          pendingConfirmationEmail={pendingConfirmationEmail}
+          authBusy={authBusy}
+          providerConfigured={isFirebaseConfigured}
+          onModeChange={(mode) => {
+            setAuthMode(mode)
+            resetAuthMessages()
+          }}
+          onEmailChange={(value) => {
+            setEmail(value)
 
-          if (
-            pendingConfirmationEmail &&
-            value.trim().toLowerCase() !== pendingConfirmationEmail.toLowerCase()
-          ) {
-            setPendingConfirmationEmail('')
-          }
+            if (
+              pendingConfirmationEmail &&
+              value.trim().toLowerCase() !== pendingConfirmationEmail.toLowerCase()
+            ) {
+              setPendingConfirmationEmail('')
+            }
 
-          resetAuthMessages()
-        }}
-        onPasswordChange={(value) => {
-          setPassword(value)
-          resetAuthMessages()
-        }}
-        onSignUpChange={handleSignUpChange}
-        onResendConfirmation={handleResendConfirmation}
-        onSignInSubmit={handleSignIn}
-        onSignUpSubmit={handleSignUp}
-      />
+            resetAuthMessages()
+          }}
+          onPasswordChange={(value) => {
+            setPassword(value)
+            resetAuthMessages()
+          }}
+          onSignUpChange={handleSignUpChange}
+          onResendConfirmation={handleResendConfirmation}
+          onSignInSubmit={handleSignIn}
+          onSignUpSubmit={handleSignUp}
+        />
+        <BuildBadge buildId={currentBuildId} deployedAt={deployedAt} />
+      </>
     )
   }
 
   return (
     <main className="app-shell">
+      <BuildBadge buildId={currentBuildId} deployedAt={deployedAt} />
       {canInstallApp ? (
         <button type="button" className="install-app-button" onClick={handleInstallApp}>
           <span className="install-app-button-icon" aria-hidden="true">
