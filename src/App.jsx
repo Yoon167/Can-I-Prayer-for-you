@@ -365,12 +365,18 @@ function getFirebaseSignInRequiredMessage(resourceLabel) {
 }
 
 function formatBuildTimestamp(timestamp) {
-  if (!timestamp) {
+  if (!timestamp || timestamp === 'undefined' || timestamp === 'null') {
     return 'Unknown deploy time'
   }
 
   try {
-    return new Date(timestamp).toLocaleString([], {
+    const parsedTimestamp = new Date(timestamp)
+
+    if (Number.isNaN(parsedTimestamp.getTime())) {
+      return 'Unknown deploy time'
+    }
+
+    return parsedTimestamp.toLocaleString([], {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
