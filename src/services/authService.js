@@ -114,6 +114,17 @@ function isEmailConfirmationError(error) {
   )
 }
 
+function isFirebaseCredentialLookupError(error) {
+  const code = error?.code ?? ''
+
+  return (
+    code === 'auth/invalid-credential' ||
+    code === 'auth/wrong-password' ||
+    code === 'auth/user-not-found' ||
+    code === 'auth/invalid-login-credentials'
+  )
+}
+
 function normalizeFirebaseAuthError(error) {
   const code = error?.code ?? ''
 
@@ -232,6 +243,38 @@ function saveLocalAccounts(accounts) {
   }
 
   window.localStorage.setItem(localAccountsStorageKey, JSON.stringify(accounts))
+}
+
+function findLocalAccountByCredentials(email, password) {
+  const normalizedEmail = normalizeEmailAddress(email)
+
+  return loadLocalAccounts().find(
+    (account) => account.email?.toLowerCase() === normalizedEmail && account.password === password,
+  )
+}
+
+function findLocalAccountBySession(session) {
+  const normalizedEmail = normalizeEmailAddress(session?.email ?? '')
+
+  if (!normalizedEmail) {
+    return null
+  }
+
+  return (
+    loadLocalAccounts().find(
+      (account) =>
+        account.email?.toLowerCase() === normalizedEmail &&
+        (!session?.userId || account.id === session.userId),
+    ) ?? null
+  )
+}
+
+function removeLocalAccount(accountId) {
+  if (!accountId) {
+    return
+  }
+
+  saveLocalAccounts(loadLocalAccounts().filter((account) => account.id !== accountId))
 }
 
 function normalizePrayerAppRole(role) {
@@ -401,14 +444,53 @@ async function buildFirebaseSessionFromUser(user) {
   return buildSession(role, user?.email ?? '', 'firebase', memberProfile, user?.uid ?? '')
 }
 
+function buildLocalSessionFromAccount(localAccount) {
+  return buildSession(
+    localAccount.role,
+    localAccount.email,
+    'local',
+    normalizeMemberProfile(localAccount.memberProfile),
+    localAccount.id,
+  )
+}
+
+async function syncFirebaseAccountProfile(user, role, memberProfile, fallbackEmail) {
+  try {
+    await updateProfile(user, {
+      displayName: memberProfile.displayName || memberProfile.fullName || null,
+    })
+  } catch {
+    // Firestore remains the source of truth for profile fields.
+  }
+
+  await upsertMemberAccount({
+    userId: user.uid,
+    email: user.email ?? fallbackEmail ?? '',
+    role,
+    memberProfile,
+  })
+}
+
+function buildCurrentLocalSession(currentSession, localAccount, role, memberProfile, email) {
+  return buildSession(
+    role,
+    email,
+    'local',
+    memberProfile,
+    currentSession?.userId ?? localAccount?.id ?? '',
+  )
+}
+
 export async function signInToPrayerApp({ email, password }) {
+  const trimmedEmail = normalizeEmailAddress(email)
+
+  if (!trimmedEmail || !password) {
+    return { error: 'Enter your email and password to continue.' }
+  }
+
+  const localAccount = findLocalAccountByCredentials(trimmedEmail, password)
+
   if (isFirebaseConfigured && firebaseAuth) {
-    const trimmedEmail = normalizeEmailAddress(email)
-
-    if (!trimmedEmail || !password) {
-      return { error: 'Enter your email and password to continue.' }
-    }
-
     if (getAuthRateLimitUntil() > Date.now()) {
       return { error: getAuthRateLimitMessage() }
     }
@@ -430,6 +512,14 @@ export async function signInToPrayerApp({ email, password }) {
         session: await buildFirebaseSessionFromUser(user),
       }
     } catch (error) {
+      if (isFirebaseCredentialLookupError(error) && localAccount) {
+        return {
+          session: buildLocalSessionFromAccount(localAccount),
+          message:
+            'Signed in with this browser\'s saved account. It is not connected to Firebase, so it will only be available on this browser until you create or use a Firebase-backed account.',
+        }
+      }
+
       return {
         error: normalizeFirebaseAuthError(error),
         requiresEmailConfirmation: isEmailConfirmationError(error),
@@ -437,24 +527,10 @@ export async function signInToPrayerApp({ email, password }) {
     }
   }
 
-  const localAccount = loadLocalAccounts().find(
-    (account) => account.email?.toLowerCase() === email.trim().toLowerCase() && account.password === password,
-  )
-
   if (localAccount) {
     return {
-      session: buildSession(
-        localAccount.role,
-        localAccount.email,
-        'local',
-        normalizeMemberProfile(localAccount.memberProfile),
-        localAccount.id,
-      ),
+      session: buildLocalSessionFromAccount(localAccount),
     }
-  }
-
-  if (!email.trim() || !password) {
-    return { error: 'Enter your email and password to continue.' }
   }
 
   return { error: 'No account matched that email and password.' }
@@ -530,6 +606,93 @@ export async function signUpToPrayerApp({ email, password, memberProfile }) {
   return {
     session: buildSession(role, localAccount.email, 'local', normalizedProfile, localAccount.id),
     message: 'Account created successfully.',
+  }
+}
+
+export async function migrateLocalAccountToFirebase(currentSession) {
+  if (!isFirebaseConfigured || !firebaseAuth) {
+    return { error: 'Firebase auth is not configured for cloud account migration yet.' }
+  }
+
+  if (!currentSession || currentSession.provider !== 'local') {
+    return { error: 'Only legacy browser accounts can be upgraded from this screen.' }
+  }
+
+  const localAccount = findLocalAccountBySession(currentSession)
+
+  if (!localAccount?.email || !localAccount.password) {
+    return {
+      error:
+        'This browser no longer has the saved local account credentials needed for migration. Sign in with the cloud account directly instead.',
+    }
+  }
+
+  if (getAuthRateLimitUntil() > Date.now()) {
+    return { error: getAuthRateLimitMessage() }
+  }
+
+  const trimmedEmail = normalizeEmailAddress(localAccount.email)
+  const role = normalizePrayerAppRole(currentSession.role ?? localAccount.role)
+  const memberProfile = normalizeMemberProfile(currentSession.memberProfile ?? localAccount.memberProfile)
+  const localSession = buildCurrentLocalSession(currentSession, localAccount, role, memberProfile, trimmedEmail)
+
+  try {
+    const credential = await createUserWithEmailAndPassword(firebaseAuth, trimmedEmail, localAccount.password)
+    const user = credential.user
+
+    await syncFirebaseAccountProfile(user, role, memberProfile, trimmedEmail)
+    await sendPrayerAppVerificationEmail(user)
+    clearAuthRateLimitCooldown()
+    await signOut(firebaseAuth)
+
+    return {
+      session: localSession,
+      pendingConfirmationEmail: trimmedEmail,
+      requiresEmailConfirmation: true,
+      message:
+        'Cloud account created. Check your email for the confirmation link. You can keep using this browser account until the Firebase account is verified.',
+    }
+  } catch (error) {
+    if (error?.code !== 'auth/email-already-in-use') {
+      return { error: normalizeFirebaseAuthError(error) }
+    }
+  }
+
+  try {
+    const credential = await signInWithEmailAndPassword(firebaseAuth, trimmedEmail, localAccount.password)
+    const user = credential.user
+
+    await syncFirebaseAccountProfile(user, role, memberProfile, trimmedEmail)
+    clearAuthRateLimitCooldown()
+
+    if (!user.emailVerified) {
+      await sendPrayerAppVerificationEmail(user)
+      await signOut(firebaseAuth)
+
+      return {
+        session: localSession,
+        pendingConfirmationEmail: trimmedEmail,
+        requiresEmailConfirmation: true,
+        message:
+          'A cloud account for this email already exists. A fresh confirmation email was sent, and you can keep using the local account on this browser until it is verified.',
+      }
+    }
+
+    removeLocalAccount(localAccount.id)
+
+    return {
+      session: await buildFirebaseSessionFromUser(user),
+      message: 'Your browser account is now connected to Firebase and available across devices.',
+    }
+  } catch (error) {
+    if (isFirebaseCredentialLookupError(error)) {
+      return {
+        error:
+          'A Firebase account already exists for this email with a different password. Sign out and use the cloud account password on the sign-in screen.',
+      }
+    }
+
+    return { error: normalizeFirebaseAuthError(error) }
   }
 }
 

@@ -8,8 +8,11 @@ function ProfileView({
   memberProfile,
   memberProfileForm,
   memberProfileStatus,
+  accountUpgradeStatus,
+  accountUpgradeTone,
   authBusy,
   handleSignOut,
+  handleUpgradeLocalAccount,
   handleMemberProfileChange,
   handleMemberAvatarChange,
   handleSaveMemberProfile,
@@ -45,6 +48,21 @@ function ProfileView({
             <p className="moment-time">Account</p>
             <h3>{authSession.email || 'Local session'}</h3>
             <p>{authSession.provider ? `Provider: ${authSession.provider}` : 'Provider not available'}</p>
+            {authSession.provider === 'local' ? (
+              <>
+                <p>
+                  This legacy browser account only works on this browser until you upgrade it to Firebase.
+                </p>
+                {accountUpgradeStatus ? (
+                  <p className={accountUpgradeTone === 'error' ? 'auth-error' : 'form-helper profile-form-helper'}>
+                    {accountUpgradeStatus}
+                  </p>
+                ) : null}
+                <button type="button" className="form-action profile-save-action" onClick={handleUpgradeLocalAccount} disabled={authBusy}>
+                  {authBusy ? 'Connecting account...' : 'Upgrade to Firebase'}
+                </button>
+              </>
+            ) : null}
           </section>
           <section className="profile-card">
             <p className="moment-time">Member identity</p>

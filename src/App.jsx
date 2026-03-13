@@ -41,6 +41,7 @@ import {
 import { isFirebaseConfigured as isFirebaseConfigured } from './lib/firebaseClient.js'
 import {
   completePrayerAppEmailConfirmationFromUrl,
+  migrateLocalAccountToFirebase,
   resendPrayerAppConfirmationEmail,
   restorePrayerAppSession,
   savePrayerAppMemberProfile,
@@ -442,6 +443,8 @@ function App() {
     ...memberProfile,
   }))
   const [memberProfileStatus, setMemberProfileStatus] = useState('')
+  const [accountUpgradeStatus, setAccountUpgradeStatus] = useState('')
+  const [accountUpgradeTone, setAccountUpgradeTone] = useState('neutral')
   const [requestSyncStatus, setRequestSyncStatus] = useState('')
   const [requestSyncTone, setRequestSyncTone] = useState('neutral')
   const [journalSyncStatus, setJournalSyncStatus] = useState('')
@@ -585,6 +588,8 @@ function App() {
       setMemberProfileForm(normalizedSession.memberProfile)
     }
   }, [])
+
+  const shouldPreserveLocalSession = useEffectEvent(() => authSession?.provider === 'local')
 
   function resetAuthMessages() {
     if (authError) {
@@ -833,7 +838,6 @@ function App() {
           : permission === 'denied'
             ? 'This browser blocked alerts. You can re-enable them from browser site settings.'
             : 'Notification permission was dismissed. You can try again later.',
-      createdAt: new Date().toISOString(),
       dedupeKey: `browser-notification-permission:${permission}`,
       view: 'home',
     })
@@ -1197,7 +1201,10 @@ function App() {
       }
 
       if (callbackResult.error) {
-        applyAuthSession(null)
+        if (!shouldPreserveLocalSession()) {
+          applyAuthSession(null)
+        }
+
         setAuthError(callbackResult.error)
       } else if (callbackResult.message) {
         setAuthNotice(callbackResult.message)
@@ -1209,7 +1216,10 @@ function App() {
         return
       }
 
-      applyAuthSession(session)
+      if (session || !shouldPreserveLocalSession()) {
+        applyAuthSession(session)
+      }
+
       setAuthReady(true)
     }
 
@@ -1218,7 +1228,10 @@ function App() {
         return
       }
 
-      applyAuthSession(null)
+      if (!shouldPreserveLocalSession()) {
+        applyAuthSession(null)
+      }
+
       setAuthNotice(
         'Unable to connect to Firebase right now. Check your Firebase web config and authorized domain settings, then refresh.',
       )
@@ -1235,6 +1248,11 @@ function App() {
     try {
       unsubscribe = subscribeToPrayerAuthChanges(roleOptions, (session) => {
         if (!isMounted) {
+          return
+        }
+
+        if (!session && shouldPreserveLocalSession()) {
+          setAuthReady(true)
           return
         }
 
@@ -2938,7 +2956,7 @@ function App() {
     setAuthBusy(true)
     resetAuthMessages()
 
-    const { session, error, requiresEmailConfirmation } = await signInToPrayerApp({
+    const { session, error, message, requiresEmailConfirmation } = await signInToPrayerApp({
       email,
       password,
     })
@@ -2955,7 +2973,7 @@ function App() {
 
     applyAuthSession(session)
     setAuthError('')
-    setAuthNotice('')
+    setAuthNotice(message || '')
     setEmail('')
     setPassword('')
     setAuthBusy(false)
@@ -3032,6 +3050,34 @@ function App() {
     setAuthBusy(false)
   }
 
+  async function handleUpgradeLocalAccount() {
+    setAuthBusy(true)
+    setAccountUpgradeStatus('')
+    setAccountUpgradeTone('neutral')
+    resetAuthMessages()
+
+    const { session, error, message, pendingConfirmationEmail: confirmedEmail } = await migrateLocalAccountToFirebase(authSession)
+
+    if (error) {
+      setAccountUpgradeStatus(error)
+      setAccountUpgradeTone('error')
+      setAuthBusy(false)
+      return
+    }
+
+    if (session) {
+      applyAuthSession(session)
+    }
+
+    if (confirmedEmail) {
+      setPendingConfirmationEmail(confirmedEmail)
+    }
+
+    setAccountUpgradeStatus(message || 'Local account upgraded successfully.')
+    setAccountUpgradeTone('success')
+    setAuthBusy(false)
+  }
+
   async function handleSignOut() {
     setAuthBusy(true)
 
@@ -3042,6 +3088,8 @@ function App() {
     setMemberProfile(defaultMemberProfile)
     setMemberProfileForm(defaultMemberProfile)
     setMemberProfileStatus('')
+    setAccountUpgradeStatus('')
+    setAccountUpgradeTone('neutral')
     setRequestSyncStatus('')
     setRequestSyncTone('neutral')
     setJournalSyncStatus('')
@@ -3299,8 +3347,11 @@ function App() {
           memberProfile={memberProfile}
           memberProfileForm={memberProfileForm}
           memberProfileStatus={memberProfileStatus}
+          accountUpgradeStatus={accountUpgradeStatus}
+          accountUpgradeTone={accountUpgradeTone}
           authBusy={authBusy}
           handleSignOut={handleSignOut}
+          handleUpgradeLocalAccount={handleUpgradeLocalAccount}
           handleMemberProfileChange={handleMemberProfileChange}
           handleMemberAvatarChange={handleMemberAvatarChange}
           handleSaveMemberProfile={handleSaveMemberProfile}
