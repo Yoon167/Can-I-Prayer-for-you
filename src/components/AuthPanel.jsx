@@ -1,4 +1,5 @@
 import AppLogo from './AppLogo.jsx'
+import { firebaseConfigurationDiagnostics } from '../lib/firebaseClient.js'
 
 function AuthPanel({
   authMode,
@@ -18,6 +19,9 @@ function AuthPanel({
   onSignInSubmit,
   onSignUpSubmit,
 }) {
+  const missingFirebaseSettings = firebaseConfigurationDiagnostics.missing
+  const placeholderFirebaseSettings = firebaseConfigurationDiagnostics.placeholders
+
   return (
     <main className="auth-shell">
       <section className="auth-panel">
@@ -29,6 +33,34 @@ function AuthPanel({
               ? 'Create an account or sign in to join a global prayer community with your profile, requests, and journal synced across devices.'
               : 'Cloud sync is not configured, so this published version stores accounts, requests, and journal entries only in this browser. Add Firebase later if you want multi-device sync.'}
           </p>
+          {!providerConfigured ? (
+            <section className="auth-diagnostics" aria-label="Firebase configuration diagnostics">
+              <p className="auth-diagnostics-title">Firebase web config needed for multi-device accounts</p>
+              <p className="auth-diagnostics-text">
+                Add the missing build variables in your hosting platform, redeploy, and make sure the deployed domain is authorized in Firebase Auth.
+              </p>
+              {missingFirebaseSettings.length > 0 ? (
+                <>
+                  <p className="auth-diagnostics-label">Missing variables</p>
+                  <ul className="auth-diagnostics-list">
+                    {missingFirebaseSettings.map((settingName) => (
+                      <li key={settingName}>{settingName}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+              {placeholderFirebaseSettings.length > 0 ? (
+                <>
+                  <p className="auth-diagnostics-label">Placeholder values still set</p>
+                  <ul className="auth-diagnostics-list">
+                    {placeholderFirebaseSettings.map((settingName) => (
+                      <li key={settingName}>{settingName}</li>
+                    ))}
+                  </ul>
+                </>
+              ) : null}
+            </section>
+          ) : null}
         </div>
 
         <div className="auth-mode-switch" role="tablist" aria-label="Authentication mode">

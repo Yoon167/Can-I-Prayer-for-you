@@ -12,6 +12,16 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID?.trim(),
 }
 
+const firebaseConfigLabels = {
+  apiKey: 'VITE_FIREBASE_API_KEY',
+  authDomain: 'VITE_FIREBASE_AUTH_DOMAIN',
+  projectId: 'VITE_FIREBASE_PROJECT_ID',
+  storageBucket: 'VITE_FIREBASE_STORAGE_BUCKET',
+  messagingSenderId: 'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  appId: 'VITE_FIREBASE_APP_ID',
+  measurementId: 'VITE_FIREBASE_MEASUREMENT_ID',
+}
+
 function isPlaceholderValue(value) {
   if (!value) {
     return true
@@ -39,6 +49,16 @@ export const isFirebaseConfigured =
   !Object.values(firebaseConfig)
     .filter(Boolean)
     .some((value) => isPlaceholderValue(value))
+
+export const firebaseConfigurationDiagnostics = {
+  configured: isFirebaseConfigured,
+  missing: Object.entries(firebaseConfigLabels)
+    .filter(([configKey]) => !firebaseConfig[configKey])
+    .map(([, label]) => label),
+  placeholders: Object.entries(firebaseConfigLabels)
+    .filter(([configKey]) => firebaseConfig[configKey] && isPlaceholderValue(firebaseConfig[configKey]))
+    .map(([, label]) => label),
+}
 
 const firebaseApp = isFirebaseConfigured
   ? getApps().length > 0
