@@ -45,22 +45,7 @@ function writeCachedDevotion(devotion) {
 }
 
 function buildFallbackContent() {
-  const { devotion, teaching } = getDailyHomeContent()
-
-  return {
-    devotion: {
-      ...devotion,
-      source: 'Curated fallback',
-      isLive: false,
-      link: null,
-    },
-    teaching: {
-      ...teaching,
-      source: 'Curated fallback',
-      isLive: false,
-      link: null,
-    },
-  }
+  return getDailyHomeContent()
 }
 
 async function fetchDailyDevotion() {

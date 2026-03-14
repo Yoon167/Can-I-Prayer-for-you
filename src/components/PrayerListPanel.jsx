@@ -5,7 +5,10 @@ function PrayerListPanel({
   setRequestText,
   requestIsAnonymous,
   setRequestIsAnonymous,
+  requestVisibilityScope,
+  setRequestVisibilityScope,
   memberDisplayName,
+  authUserId,
   handleAddPrayerRequest,
   filterOptions,
   focusFilter,
@@ -13,6 +16,10 @@ function PrayerListPanel({
   filteredFocusItems,
   handleToggleFocusItem,
   handleMarkAnswered,
+  handleToggleFollowUp,
+  followUpDrafts,
+  handleFollowUpDraftChange,
+  handleAddFollowUpMessage,
   handleRemoveFocusItem,
   requestSyncStatus,
   requestSyncTone,
@@ -61,10 +68,21 @@ function PrayerListPanel({
           This request will show as{' '}
           <strong>{requestIsAnonymous ? 'Anonymous member' : memberDisplayName}</strong>
         </p>
+        <label>
+          <span className="auth-label">Request visibility</span>
+          <select
+            className="auth-input"
+            value={requestVisibilityScope}
+            onChange={(event) => setRequestVisibilityScope(event.target.value)}
+          >
+            <option value="team">Intercessory team</option>
+            <option value="pastoral">Pastor and prayer core only</option>
+          </select>
+        </label>
       </div>
 
       <p className="form-helper">
-        New requests added here can be covered in prayer by the team. Intercessor and pastoral workflow actions are reserved for assigned prayer leaders.
+        Team requests move into the live intercessory swipe deck. Sensitive requests go straight to pastoral review and stay limited to the requester, pastors, and prayer core.
       </p>
 
       {requestSyncStatus ? (
@@ -116,9 +134,75 @@ function PrayerListPanel({
               <p className="focus-requester">
                 Requested by <strong>{item.isAnonymous ? 'Anonymous member' : item.requestedBy}</strong>
               </p>
+              <div className="request-status-row">
+                <span className="request-status-chip">
+                  {item.workflowStatus === 'queue' ? 'Pending' : item.workflowStatus}
+                </span>
+                <span className="request-status-chip">
+                  {item.visibilityScope === 'pastoral' ? 'Pastoral only' : 'Intercessory team'}
+                </span>
+                {item.followUpStatus === 'requested' ? (
+                  <span className="request-status-chip request-status-chip-accent">Follow-up</span>
+                ) : null}
+              </div>
+              {item.prayedNotice ? <p className="request-owner-status">{item.prayedNotice}</p> : null}
+              {item.prayedAt ? (
+                <p className="request-owner-status">
+                  Prayed {item.prayedAt}
+                  {item.prayedBy ? ` by ${item.prayedBy}` : ''}.
+                </p>
+              ) : null}
+              {item.followUpStatus === 'requested' || (item.followUpMessages?.length ?? 0) > 0 ? (
+                <div className="follow-up-thread">
+                  <p className="follow-up-label">Follow-up chat</p>
+                  {(item.followUpMessages ?? []).length === 0 ? (
+                    <p className="request-owner-status">No follow-up replies yet.</p>
+                  ) : (
+                    <div className="follow-up-message-list">
+                      {(item.followUpMessages ?? []).map((message) => (
+                        <section
+                          key={message.id}
+                          className={
+                            message.senderType === 'requester'
+                              ? 'follow-up-message follow-up-message-requester'
+                              : 'follow-up-message'
+                          }
+                        >
+                          <p className="moment-time">
+                            {message.authorName} • {message.authorRole}
+                          </p>
+                          <p>{message.text}</p>
+                          {message.createdAt ? <p className="moment-time">{message.createdAt}</p> : null}
+                        </section>
+                      ))}
+                    </div>
+                  )}
+                  <div className="follow-up-entry">
+                    <textarea
+                      className="answered-note-input"
+                      value={followUpDrafts[item.id] ?? ''}
+                      onChange={(event) => handleFollowUpDraftChange(item.id, event.target.value)}
+                      placeholder={
+                        item.ownerUserId === authUserId
+                          ? 'Reply with an update, new need, or answered report.'
+                          : 'Send a follow-up prayer note to the requester.'
+                      }
+                      rows="3"
+                    />
+                    <button
+                      type="button"
+                      className="form-action"
+                      onClick={() => handleAddFollowUpMessage(item.id)}
+                      disabled={!(followUpDrafts[item.id] ?? '').trim()}
+                    >
+                      Send reply
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="focus-actions">
-              {canManagePrayerWorkflow ? (
+              {canManagePrayerWorkflow || item.ownerUserId === authUserId ? (
                 <button
                   type="button"
                   className="ghost-action answer-action"
@@ -126,6 +210,16 @@ function PrayerListPanel({
                   aria-label={`Mark ${item.label} as answered`}
                 >
                   Answered
+                </button>
+              ) : null}
+              {canManagePrayerWorkflow ? (
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() => handleToggleFollowUp(item.id)}
+                  aria-label={`Toggle follow-up for ${item.label}`}
+                >
+                  {item.followUpStatus === 'requested' ? 'Clear follow-up' : 'Follow-up'}
                 </button>
               ) : null}
               {canRemoveRequests ? (

@@ -1,108 +1,382 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient.js'
-import { formatAnsweredDate } from '../utils/prayerAppUtils.js'
+// services/authService.js
 
-const localAccountsStorageKey = 'prayer-app-local-accounts'
-const authRateLimitStorageKey = 'prayer-app-auth-rate-limit-until'
-const authRateLimitCooldownMs = 60 * 1000
+import {
+  applyActionCode,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  reload,
+  sendEmailVerification,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from 'firebase/auth';
+import { Capacitor } from '@capacitor/core';
+import { firebaseAuth, isFirebaseConfigured } from '../lib/firebaseClient.js';
+import { getMemberAccount, upsertMemberAccount } from './memberDirectoryService.js';
+import { formatAnsweredDate } from '../utils/prayerAppUtils.js';
+
+const localAccountsStorageKey = 'prayer-app-local-accounts';
+const authRateLimitStorageKey = 'prayer-app-auth-rate-limit-until';
+const authRateLimitCooldownMs = 60 * 1000;
+const nativeAndroidPackageName = 'io.github.yoon167.prayerapp';
+
+// ✅ NEW: hard-set the web redirect base to your allowlisted GitHub Pages URL.
+// This prevents auth/unauthorized-continue-uri when links are triggered from localhost or other hosts.
+const WEB_REDIRECT_BASE = 'https://yoon167.github.io/Can-I-Prayer-for-you/';
+
+function normalizeEmailAddress(email) {
+  return email.trim().toLowerCase();
+}
+
+function isValidEmailAddress(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidPassword(password) {
+  return password.length >= 6;
+}
 
 function getAuthRateLimitUntil() {
   if (typeof window === 'undefined') {
-    return 0
+    return 0;
   }
 
-  const storedValue = window.localStorage.getItem(authRateLimitStorageKey)
-  const nextAllowedAt = Number(storedValue)
+  const storedValue = window.localStorage.getItem(authRateLimitStorageKey);
+  const nextAllowedAt = Number(storedValue);
 
-  return Number.isFinite(nextAllowedAt) ? nextAllowedAt : 0
+  return Number.isFinite(nextAllowedAt) ? nextAllowedAt : 0;
 }
 
 function setAuthRateLimitCooldown() {
   if (typeof window === 'undefined') {
-    return
+    return;
   }
 
-  window.localStorage.setItem(authRateLimitStorageKey, String(Date.now() + authRateLimitCooldownMs))
+  window.localStorage.setItem(
+    authRateLimitStorageKey,
+    String(Date.now() + authRateLimitCooldownMs)
+  );
 }
 
 function clearAuthRateLimitCooldown() {
   if (typeof window === 'undefined') {
-    return
+    return;
   }
 
-  window.localStorage.removeItem(authRateLimitStorageKey)
+  window.localStorage.removeItem(authRateLimitStorageKey);
 }
 
 function getAuthRateLimitMessage() {
-  const remainingMs = getAuthRateLimitUntil() - Date.now()
-  const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000))
+  const remainingMs = getAuthRateLimitUntil() - Date.now();
+  const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
 
-  return `Too many sign-in attempts right now. Please wait ${remainingSeconds} seconds and try again.`
+  return `Too many sign-in attempts right now. Please wait ${remainingSeconds} seconds and try again.`;
+}
+
+// ✅ UPDATED: deterministic redirect URL
+function getFirebaseEmailRedirectUrl() {
+  const authDomain = firebaseAuth?.app?.options?.authDomain?.trim();
+
+  // Native (Capacitor) → use Firebase hosted domain (APK catches it via intent-filter)
+  if (isNativePrayerAppPlatform() && authDomain) {
+    return `https://${authDomain}/`; // e.g., https://can-i-pray-for-you.firebaseapp.com/
+  }
+
+  // Web (browser) → ALWAYS use the allowlisted GitHub Pages base
+  return WEB_REDIRECT_BASE;
+}
+
+function isNativePrayerAppPlatform() {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() !== 'web';
+}
+
+function resolveFirebaseActionUrl(url) {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    const embeddedLink = parsedUrl.searchParams.get('link');
+    const deepLinkId = parsedUrl.searchParams.get('deep_link_id');
+
+    if (embeddedLink) {
+      return resolveFirebaseActionUrl(embeddedLink);
+    }
+
+    if (deepLinkId) {
+      return resolveFirebaseActionUrl(deepLinkId);
+    }
+
+    return parsedUrl;
+  } catch {
+    return null;
+  }
+}
+
+function clearFirebaseAuthUrlParams(currentUrl) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const activeUrl = currentUrl
+    ? resolveFirebaseActionUrl(currentUrl)?.toString()
+    : window.location.href;
+
+  if (activeUrl && activeUrl !== window.location.href) {
+    return;
+  }
+
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.delete('mode');
+  nextUrl.searchParams.delete('oobCode');
+  nextUrl.searchParams.delete('apiKey');
+  nextUrl.searchParams.delete('continueUrl');
+  nextUrl.searchParams.delete('lang');
+  nextUrl.searchParams.delete('error');
+  nextUrl.searchParams.delete('error_code');
+  nextUrl.searchParams.delete('error_description');
+
+  window.history.replaceState({}, document.title, nextUrl.toString());
+}
+
+function normalizeFirebaseUrlMessage(rawMessage, fallbackMessage) {
+  if (!rawMessage) {
+    return fallbackMessage;
+  }
+
+  return rawMessage.replace(/\+/g, ' ');
 }
 
 function isRateLimitError(error) {
-  const message = error?.message?.toLowerCase?.() ?? ''
-
-  return error?.status === 429 || message.includes('rate limit') || message.includes('too many requests')
+  const message = error?.message?.toLowerCase?.() ?? '';
+  return error?.status === 429 || message.includes('rate limit') || message.includes('too many requests');
 }
 
-function normalizeSupabaseAuthError(error) {
+function isEmailConfirmationError(error) {
+  const message = error?.message?.toLowerCase?.() ?? '';
+  return (
+    message.includes('email not confirmed') ||
+    message.includes('email_not_confirmed') ||
+    message.includes('confirm your email')
+  );
+}
+
+function isFirebaseCredentialLookupError(error) {
+  const code = error?.code ?? '';
+  return (
+    code === 'auth/invalid-credential' ||
+    code === 'auth/wrong-password' ||
+    code === 'auth/user-not-found' ||
+    code === 'auth/invalid-login-credentials'
+  );
+}
+
+function normalizeFirebaseAuthError(error) {
+  const code = error?.code ?? '';
+
   if (isRateLimitError(error)) {
-    setAuthRateLimitCooldown()
-    return getAuthRateLimitMessage()
+    setAuthRateLimitCooldown();
+    return getAuthRateLimitMessage();
   }
 
-  return error?.message ?? 'Authentication is unavailable right now.'
+  if (code === 'auth/email-already-in-use') {
+    return 'That email is already registered. Try signing in, or use resend confirmation if the account is still waiting to be confirmed.';
+  }
+
+  if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+    return 'No account matched that email and password.';
+  }
+
+  if (code === 'auth/weak-password') {
+    return 'Password must be at least 6 characters long.';
+  }
+
+  if (code === 'auth/invalid-email') {
+    return 'Enter a valid email address to continue.';
+  }
+
+  if (isEmailConfirmationError(error) || code === 'auth/email-not-verified') {
+    return 'Your email is not confirmed yet. Open the confirmation email, or resend it below.';
+  }
+
+  if (code === 'auth/too-many-requests') {
+    return getAuthRateLimitMessage();
+  }
+
+  if (code === 'auth/network-request-failed') {
+    return 'Authentication is unavailable right now. Check your network connection and try again.';
+  }
+
+  return error?.message ?? 'Authentication is unavailable right now.';
+}
+
+async function sendPrayerAppVerificationEmail(user) {
+  const actionCodeSettings = {
+    url: getFirebaseEmailRedirectUrl(), // ✅ Pages on web, Firebase domain on native
+    handleCodeInApp: true,
+  };
+
+  if (isNativePrayerAppPlatform()) {
+    actionCodeSettings.android = {
+      packageName: nativeAndroidPackageName,
+      installApp: true,
+    };
+  }
+
+  await sendEmailVerification(user, actionCodeSettings);
+}
+
+export async function completePrayerAppEmailConfirmationFromUrl(url) {
+  if (!isFirebaseConfigured || !firebaseAuth || typeof window === 'undefined') {
+    return { handled: false };
+  }
+
+  const currentUrl = resolveFirebaseActionUrl(url ?? window.location.href);
+
+  if (!currentUrl) {
+    return { handled: false };
+  }
+
+  const verificationMode = currentUrl.searchParams.get('mode');
+  const actionCode = currentUrl.searchParams.get('oobCode');
+  const authError = currentUrl.searchParams.get('error');
+  const authErrorDescription = currentUrl.searchParams.get('error_description');
+
+  if (authError || authErrorDescription) {
+    clearFirebaseAuthUrlParams(currentUrl.toString());
+    return {
+      handled: true,
+      error: normalizeFirebaseUrlMessage(
+        authErrorDescription,
+        'The email confirmation link could not be completed. Request a fresh confirmation email and try again.'
+      ),
+    };
+  }
+
+  if (!actionCode || !verificationMode) {
+    return { handled: false };
+  }
+
+  if (verificationMode !== 'verifyEmail') {
+    return { handled: false };
+  }
+
+  try {
+    await applyActionCode(firebaseAuth, actionCode);
+
+    if (firebaseAuth.currentUser) {
+      await reload(firebaseAuth.currentUser);
+    }
+
+    clearFirebaseAuthUrlParams(currentUrl.toString());
+  } catch (error) {
+    clearFirebaseAuthUrlParams(currentUrl.toString());
+    return {
+      handled: true,
+      error: normalizeFirebaseAuthError(error),
+    };
+  }
+
+  return {
+    handled: true,
+    message: 'Email confirmed successfully. Finishing sign-in...',
+  };
 }
 
 function loadLocalAccounts() {
   if (typeof window === 'undefined') {
-    return []
+    return [];
   }
 
   try {
-    const storedValue = window.localStorage.getItem(localAccountsStorageKey)
+    const storedValue = window.localStorage.getItem(localAccountsStorageKey);
 
     if (!storedValue) {
-      return []
+      return [];
     }
 
-    const parsedValue = JSON.parse(storedValue)
-    return Array.isArray(parsedValue) ? parsedValue : []
+    const parsedValue = JSON.parse(storedValue);
+    return Array.isArray(parsedValue) ? parsedValue : [];
   } catch {
-    return []
+    return [];
   }
 }
 
 function saveLocalAccounts(accounts) {
   if (typeof window === 'undefined') {
-    return
+    return;
   }
 
-  window.localStorage.setItem(localAccountsStorageKey, JSON.stringify(accounts))
+  window.localStorage.setItem(localAccountsStorageKey, JSON.stringify(accounts));
+}
+
+function findLocalAccountByCredentials(email, password) {
+  const normalizedEmail = normalizeEmailAddress(email);
+
+  return loadLocalAccounts().find(
+    (account) => account.email?.toLowerCase() === normalizedEmail && account.password === password
+  );
+}
+
+function findLocalAccountBySession(session) {
+  const normalizedEmail = normalizeEmailAddress(session?.email ?? '');
+
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  return (
+    loadLocalAccounts().find(
+      (account) =>
+        account.email?.toLowerCase() === normalizedEmail &&
+        (!session?.userId || account.id === session.userId)
+    ) ?? null
+  );
+}
+
+function removeLocalAccount(accountId) {
+  if (!accountId) {
+    return;
+  }
+
+  saveLocalAccounts(loadLocalAccounts().filter((account) => account.id !== accountId));
+}
+
+function normalizePrayerAppRole(role) {
+  if (role === 'owner') {
+    return 'prayer-core';
+  }
+
+  if (role === 'pastor' || role === 'intercessor' || role === 'prayer-core') {
+    return role;
+  }
+
+  return 'member';
 }
 
 function mapAccountTypeToRole(accountType) {
   if (accountType === 'pastor') {
-    return 'pastor'
+    return 'pastor';
   }
 
   if (accountType === 'owner') {
-    return 'prayer-core'
+    return 'prayer-core';
   }
 
-  return 'member'
+  return 'member';
 }
 
 function mapRoleToAccountType(role) {
   if (role === 'pastor') {
-    return 'pastor'
+    return 'pastor';
   }
 
   if (role === 'prayer-core') {
-    return 'owner'
+    return 'owner';
   }
 
-  return 'member'
+  return 'member';
 }
 
 function normalizeMemberProfile(profile) {
@@ -117,7 +391,7 @@ function normalizeMemberProfile(profile) {
       bio: '',
       accountType: 'member',
       avatarUrl: '',
-    }
+    };
   }
 
   return {
@@ -131,17 +405,44 @@ function normalizeMemberProfile(profile) {
     accountType:
       profile.accountType === 'pastor' || profile.accountType === 'owner' ? profile.accountType : 'member',
     avatarUrl: typeof profile.avatarUrl === 'string' ? profile.avatarUrl : '',
-  }
+  };
 }
 
 function getMemberProfile(user) {
-  const normalizedProfile = normalizeMemberProfile(user?.user_metadata?.memberProfile)
-  const resolvedRole = user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(normalizedProfile.accountType)
+  const normalizedProfile = normalizeMemberProfile(user?.user_metadata?.memberProfile);
+  const resolvedRole = normalizePrayerAppRole(
+    user?.app_metadata?.role ?? user?.user_metadata?.role ?? mapAccountTypeToRole(normalizedProfile.accountType)
+  );
 
   return {
     ...normalizedProfile,
     accountType: mapRoleToAccountType(resolvedRole),
+  };
+}
+
+function pickProfileValue(primaryValue, fallbackValue) {
+  return typeof primaryValue === 'string' && primaryValue.trim() ? primaryValue : fallbackValue;
+}
+
+function mergeMemberProfile(baseProfile, memberAccount, resolvedRole) {
+  if (!memberAccount) {
+    return {
+      ...baseProfile,
+      accountType: mapRoleToAccountType(resolvedRole),
+    };
   }
+
+  return {
+    fullName: pickProfileValue(memberAccount.fullName, baseProfile.fullName),
+    displayName: pickProfileValue(memberAccount.displayName, baseProfile.displayName),
+    phone: pickProfileValue(memberAccount.phone, baseProfile.phone),
+    address: pickProfileValue(memberAccount.address, baseProfile.address),
+    churchName: pickProfileValue(memberAccount.churchName, baseProfile.churchName),
+    pastorName: pickProfileValue(memberAccount.pastorName, baseProfile.pastorName),
+    bio: pickProfileValue(memberAccount.bio, baseProfile.bio),
+    accountType: mapRoleToAccountType(resolvedRole),
+    avatarUrl: pickProfileValue(memberAccount.avatarUrl, baseProfile.avatarUrl),
+  };
 }
 
 function buildSession(role, email, provider, memberProfile = normalizeMemberProfile(), userId = '') {
@@ -152,198 +453,363 @@ function buildSession(role, email, provider, memberProfile = normalizeMemberProf
     signedInAt: formatAnsweredDate(),
     memberProfile,
     userId,
-  }
+  };
 }
 
 function getSessionRole(session) {
-  return (
+  return normalizePrayerAppRole(
     session?.user?.app_metadata?.role ??
-    session?.user?.user_metadata?.role ??
-    mapAccountTypeToRole(getMemberProfile(session?.user).accountType)
-  )
+      session?.user?.user_metadata?.role ??
+      mapAccountTypeToRole(getMemberProfile(session?.user).accountType)
+  );
+}
+
+async function syncFirebaseMemberContext(user) {
+  const fallbackProfile = getMemberProfile(user);
+  const fallbackRole = normalizePrayerAppRole(mapAccountTypeToRole(fallbackProfile.accountType));
+
+  let memberAccount = null;
+
+  try {
+    const { item } = await getMemberAccount(user?.uid);
+    memberAccount = item;
+  } catch {
+    memberAccount = null;
+  }
+
+  const resolvedRole = normalizePrayerAppRole(memberAccount?.role ?? fallbackRole);
+  const mergedProfile = mergeMemberProfile(fallbackProfile, memberAccount, resolvedRole);
+
+  try {
+    const { item } = await upsertMemberAccount({
+      userId: user?.uid ?? '',
+      email: user?.email ?? memberAccount?.email ?? '',
+      role: resolvedRole,
+      memberProfile: mergedProfile,
+    });
+
+    if (item) {
+      return {
+        role: item.role,
+        memberProfile: mergeMemberProfile(mergedProfile, item, item.role),
+      };
+    }
+  } catch {
+    // Fall back to auth metadata when the member directory is not ready yet.
+  }
+
+  return {
+    role: resolvedRole,
+    memberProfile: mergedProfile,
+  };
+}
+
+async function buildFirebaseSessionFromUser(user) {
+  const { role, memberProfile } = await syncFirebaseMemberContext(user);
+  return buildSession(role, user?.email ?? '', 'firebase', memberProfile, user?.uid ?? '');
+}
+
+function buildLocalSessionFromAccount(localAccount) {
+  return buildSession(
+    localAccount.role,
+    localAccount.email,
+    'local',
+    normalizeMemberProfile(localAccount.memberProfile),
+    localAccount.id
+  );
+}
+
+async function syncFirebaseAccountProfile(user, role, memberProfile, fallbackEmail) {
+  try {
+    await updateProfile(user, {
+      displayName: memberProfile.displayName || memberProfile.fullName || null,
+    });
+  } catch {
+    // Firestore remains the source of truth for profile fields.
+  }
+
+  await upsertMemberAccount({
+    userId: user.uid,
+    email: user.email ?? fallbackEmail ?? '',
+    role,
+    memberProfile,
+  });
+}
+
+function buildCurrentLocalSession(currentSession, localAccount, role, memberProfile, email) {
+  return buildSession(
+    role,
+    email,
+    'local',
+    memberProfile,
+    currentSession?.userId ?? localAccount?.id ?? ''
+  );
 }
 
 export async function signInToPrayerApp({ email, password }) {
-  if (isSupabaseConfigured && supabase) {
-    if (!email.trim() || !password) {
-      return { error: 'Enter your email and password to continue.' }
-    }
+  const trimmedEmail = normalizeEmailAddress(email);
 
-    if (getAuthRateLimitUntil() > Date.now()) {
-      return { error: getAuthRateLimitMessage() }
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    })
-
-    if (error) {
-      return { error: normalizeSupabaseAuthError(error) }
-    }
-
-    clearAuthRateLimitCooldown()
-
-    const sessionRole = getSessionRole(data.session)
-    const memberProfile = getMemberProfile(data.user)
-
-    return {
-      session: buildSession(
-        sessionRole,
-        data.user?.email ?? '',
-        'supabase',
-        memberProfile,
-        data.user?.id ?? '',
-      ),
-    }
+  if (!trimmedEmail || !password) {
+    return { error: 'Enter your email and password to continue.' };
   }
 
-  const localAccount = loadLocalAccounts().find(
-    (account) => account.email?.toLowerCase() === email.trim().toLowerCase() && account.password === password,
-  )
+  const localAccount = findLocalAccountByCredentials(trimmedEmail, password);
+
+  if (isFirebaseConfigured && firebaseAuth) {
+    if (getAuthRateLimitUntil() > Date.now()) {
+      return { error: getAuthRateLimitMessage() };
+    }
+
+    try {
+      const credential = await signInWithEmailAndPassword(firebaseAuth, trimmedEmail, password);
+      const user = credential.user;
+
+      if (!user.emailVerified) {
+        return {
+          error: normalizeFirebaseAuthError({ code: 'auth/email-not-verified' }),
+          requiresEmailConfirmation: true,
+        };
+      }
+
+      clearAuthRateLimitCooldown();
+
+      return {
+        session: await buildFirebaseSessionFromUser(user),
+      };
+    } catch (error) {
+      if (isFirebaseCredentialLookupError(error) && localAccount) {
+        return {
+          session: buildLocalSessionFromAccount(localAccount),
+          message:
+            "Signed in with this browser's saved account. It is not connected to Firebase, so it will only be available on this browser until you create or use a Firebase-backed account.",
+        };
+      }
+
+      return {
+        error: normalizeFirebaseAuthError(error),
+        requiresEmailConfirmation: isEmailConfirmationError(error),
+      };
+    }
+  }
 
   if (localAccount) {
     return {
-      session: buildSession(
-        localAccount.role,
-        localAccount.email,
-        'local',
-        normalizeMemberProfile(localAccount.memberProfile),
-        localAccount.id,
-      ),
-    }
+      session: buildLocalSessionFromAccount(localAccount),
+    };
   }
 
-  if (!email.trim() || !password) {
-    return { error: 'Enter your email and password to continue.' }
-  }
-
-  return { error: 'No account matched that email and password.' }
+  return { error: 'No account matched that email and password.' };
 }
 
 export async function signUpToPrayerApp({ email, password, memberProfile }) {
   const normalizedProfile = {
     ...normalizeMemberProfile(memberProfile),
     accountType: 'member',
-  }
-  const role = 'member'
+  };
+  const role = 'member';
+  const trimmedEmail = normalizeEmailAddress(email);
 
-  if (!email.trim() || !password) {
-    return { error: 'Enter your email and password to create an account.' }
+  if (!trimmedEmail || !password) {
+    return { error: 'Enter your email and password to create an account.' };
   }
 
-  if (isSupabaseConfigured && supabase) {
+  if (!isValidEmailAddress(trimmedEmail)) {
+    return { error: 'Enter a valid email address to create an account.' };
+  }
+
+  if (!isValidPassword(password)) {
+    return { error: 'Password must be at least 6 characters long.' };
+  }
+
+  if (isFirebaseConfigured && firebaseAuth) {
     if (getAuthRateLimitUntil() > Date.now()) {
-      return { error: getAuthRateLimitMessage() }
+      return { error: getAuthRateLimitMessage() };
     }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: {
-          role,
-          memberProfile: normalizedProfile,
-        },
-      },
-    })
+    try {
+      const credential = await createUserWithEmailAndPassword(firebaseAuth, trimmedEmail, password);
+      const user = credential.user;
 
-    if (error) {
-      return { error: normalizeSupabaseAuthError(error) }
-    }
+      await upsertMemberAccount({
+        userId: user.uid,
+        email: trimmedEmail,
+        role,
+        memberProfile: normalizedProfile,
+      });
 
-    clearAuthRateLimitCooldown()
+      await sendPrayerAppVerificationEmail(user);
+      clearAuthRateLimitCooldown();
 
-    if (!data.session) {
       return {
         session: null,
-        message: 'Account created. Sign in with your email and password to continue.',
-      }
-    }
-
-    return {
-      session: buildSession(role, data.user?.email ?? '', 'supabase', normalizedProfile, data.user?.id ?? ''),
-      message: 'Account created successfully.',
+        pendingConfirmationEmail: trimmedEmail,
+        requiresEmailConfirmation: true,
+        message:
+          'Account created. Check your email for the confirmation link before signing in. If it does not arrive, resend it below.',
+      };
+    } catch (error) {
+      return { error: normalizeFirebaseAuthError(error) };
     }
   }
 
-  const existingAccounts = loadLocalAccounts()
+  const existingAccounts = loadLocalAccounts();
 
-  if (existingAccounts.some((account) => account.email?.toLowerCase() === email.trim().toLowerCase())) {
-    return { error: 'An account with that email already exists.' }
+  if (existingAccounts.some((account) => account.email?.toLowerCase() === trimmedEmail)) {
+    return { error: 'An account with that email already exists.' };
   }
 
   const localAccount = {
     id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`,
-    email: email.trim().toLowerCase(),
+    email: trimmedEmail,
     password,
     role,
     memberProfile: normalizedProfile,
-  }
+  };
 
-  saveLocalAccounts([localAccount, ...existingAccounts])
+  saveLocalAccounts([localAccount, ...existingAccounts]);
 
   return {
     session: buildSession(role, localAccount.email, 'local', normalizedProfile, localAccount.id),
     message: 'Account created successfully.',
+  };
+}
+
+export async function migrateLocalAccountToFirebase(currentSession) {
+  if (!isFirebaseConfigured || !firebaseAuth) {
+    return { error: 'Firebase auth is not configured for cloud account migration yet.' };
+  }
+
+  if (!currentSession || currentSession.provider !== 'local') {
+    return { error: 'Only legacy browser accounts can be upgraded from this screen.' };
+  }
+
+  const localAccount = findLocalAccountBySession(currentSession);
+
+  if (!localAccount?.email || !localAccount.password) {
+    return {
+      error:
+        'This browser no longer has the saved local account credentials needed for migration. Sign in with the cloud account directly instead.',
+    };
+  }
+
+  if (getAuthRateLimitUntil() > Date.now()) {
+    return { error: getAuthRateLimitMessage() };
+  }
+
+  const trimmedEmail = normalizeEmailAddress(localAccount.email);
+  const role = normalizePrayerAppRole(currentSession.role ?? localAccount.role);
+  const memberProfile = normalizeMemberProfile(currentSession.memberProfile ?? localAccount.memberProfile);
+  const localSession = buildCurrentLocalSession(currentSession, localAccount, role, memberProfile, trimmedEmail);
+
+  try {
+    const credential = await createUserWithEmailAndPassword(firebaseAuth, trimmedEmail, localAccount.password);
+    const user = credential.user;
+
+    await syncFirebaseAccountProfile(user, role, memberProfile, trimmedEmail);
+    await sendPrayerAppVerificationEmail(user);
+    clearAuthRateLimitCooldown();
+    await signOut(firebaseAuth);
+
+    return {
+      session: localSession,
+      pendingConfirmationEmail: trimmedEmail,
+      requiresEmailConfirmation: true,
+      message:
+        'Cloud account created. Check your email for the confirmation link. You can keep using this browser account until the Firebase account is verified.',
+    };
+  } catch (error) {
+    if (error?.code !== 'auth/email-already-in-use') {
+      return { error: normalizeFirebaseAuthError(error) };
+    }
+  }
+
+  try {
+    const credential = await signInWithEmailAndPassword(firebaseAuth, trimmedEmail, localAccount.password);
+    const user = credential.user;
+
+    await syncFirebaseAccountProfile(user, role, memberProfile, trimmedEmail);
+    clearAuthRateLimitCooldown();
+
+    if (!user.emailVerified) {
+      await sendPrayerAppVerificationEmail(user);
+      await signOut(firebaseAuth);
+
+      return {
+        session: localSession,
+        pendingConfirmationEmail: trimmedEmail,
+        requiresEmailConfirmation: true,
+        message:
+          'A cloud account for this email already exists. A fresh confirmation email was sent, and you can keep using the local account on this browser until it is verified.',
+      };
+    }
+
+    removeLocalAccount(localAccount.id);
+
+    return {
+      session: await buildFirebaseSessionFromUser(user),
+      message: 'Your browser account is now connected to Firebase and available across devices.',
+    };
+  } catch (error) {
+    if (isFirebaseCredentialLookupError(error)) {
+      return {
+        error:
+          'A Firebase account already exists for this email with a different password. Sign out and use the cloud account password on the sign-in screen.',
+      };
+    }
+
+    return { error: normalizeFirebaseAuthError(error) };
   }
 }
 
 export async function signOutOfPrayerApp() {
-  if (isSupabaseConfigured && supabase) {
-    const { error } = await supabase.auth.signOut({ scope: 'local' })
-
-    if (error) {
-      return { error: error.message }
+  if (isFirebaseConfigured && firebaseAuth) {
+    try {
+      await signOut(firebaseAuth);
+    } catch (error) {
+      return { error: error.message };
     }
   }
 
-  return { error: null }
+  return { error: null };
 }
 
 export async function restorePrayerAppSession(roleOptions) {
-  if (!isSupabaseConfigured || !supabase) {
-    return null
+  if (!isFirebaseConfigured || !firebaseAuth) {
+    return null;
   }
 
-  const { data, error } = await supabase.auth.getSession()
+  const user = firebaseAuth.currentUser;
 
-  if (error || !data.session) {
-    return null
+  if (!user || !user.emailVerified) {
+    return null;
   }
 
-  const sessionRole = getSessionRole(data.session)
+  const nextSession = await buildFirebaseSessionFromUser(user);
 
-  if (!roleOptions.some((role) => role.id === sessionRole)) {
-    return null
+  if (!roleOptions.some((role) => role.id === nextSession.role)) {
+    return null;
   }
 
-  return buildSession(
-    sessionRole,
-    data.session.user?.email ?? '',
-    'supabase',
-    getMemberProfile(data.session.user),
-    data.session.user?.id ?? '',
-  )
+  return nextSession;
 }
 
 export async function savePrayerAppMemberProfile(profile, currentSession) {
-  const preservedRole = currentSession?.role ?? 'member'
+  const preservedRole = currentSession?.role ?? 'member';
   const normalizedProfile = {
     ...normalizeMemberProfile(profile),
     accountType: mapRoleToAccountType(preservedRole),
-  }
-  const role = preservedRole
+  };
+  const role = preservedRole;
 
-  if (!isSupabaseConfigured || !supabase) {
+  if (!isFirebaseConfigured || !firebaseAuth) {
     if (currentSession?.provider === 'local' && currentSession.email) {
       const nextAccounts = loadLocalAccounts().map((account) =>
         account.email?.toLowerCase() === currentSession.email.toLowerCase()
           ? { ...account, role, memberProfile: normalizedProfile }
-          : account,
-      )
+          : account
+      );
 
-      saveLocalAccounts(nextAccounts)
+      saveLocalAccounts(nextAccounts);
     }
 
     return {
@@ -352,85 +818,132 @@ export async function savePrayerAppMemberProfile(profile, currentSession) {
         currentSession?.email ?? '',
         currentSession?.provider ?? 'local',
         normalizedProfile,
-        currentSession?.userId ?? '',
+        currentSession?.userId ?? ''
       ),
       profile: normalizedProfile,
       error: null,
-    }
+    };
   }
 
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser()
+  const user = firebaseAuth.currentUser;
 
-  if (userError || !user) {
-    return { error: userError?.message ?? 'Unable to load the current user.' }
+  if (!user) {
+    return { error: 'Unable to load the current user.' };
   }
 
-  const mergedMetadata = {
-    ...(user.user_metadata ?? {}),
+  try {
+    await updateProfile(user, {
+      displayName: normalizedProfile.displayName || normalizedProfile.fullName || null,
+    });
+  } catch {
+    // Firestore remains the source of truth for profile fields.
+  }
+
+  const { item: savedAccount, error: directoryError } = await upsertMemberAccount({
+    userId: user.uid,
+    email: user.email ?? currentSession?.email ?? '',
     role,
     memberProfile: normalizedProfile,
-  }
+  });
 
-  const { data, error } = await supabase.auth.updateUser({
-    data: mergedMetadata,
-  })
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  const sessionRole = user.app_metadata?.role ?? mergedMetadata.role ?? null
+  const sessionRole = normalizePrayerAppRole(savedAccount?.role ?? role);
+  const nextProfile = mergeMemberProfile(normalizedProfile, savedAccount, sessionRole ?? role);
 
   return {
-    error: null,
-    profile: normalizedProfile,
+    error: directoryError ?? null,
+    profile: nextProfile,
     session: sessionRole
-      ? buildSession(
-          sessionRole,
-          data.user?.email ?? user.email ?? '',
-          'supabase',
-          normalizedProfile,
-          data.user?.id ?? user.id,
-        )
+      ? buildSession(sessionRole, user.email ?? '', 'firebase', nextProfile, user.uid)
       : null,
-  }
+  };
 }
 
 export function subscribeToPrayerAuthChanges(roleOptions, onSessionChange) {
-  if (!isSupabaseConfigured || !supabase) {
-    return () => {}
+  if (!isFirebaseConfigured || !firebaseAuth) {
+    return () => {};
   }
 
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((_event, session) => {
-    if (!session) {
-      onSessionChange(null)
-      return
+  const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
+    if (!user || !user.emailVerified) {
+      onSessionChange(null);
+      return;
     }
 
-    const sessionRole = getSessionRole(session)
+    buildFirebaseSessionFromUser(user)
+      .then((nextSession) => {
+        if (!roleOptions.some((role) => role.id === nextSession.role)) {
+          onSessionChange(null);
+          return;
+        }
 
-    if (!roleOptions.some((role) => role.id === sessionRole)) {
-      onSessionChange(null)
-      return
-    }
+        onSessionChange(nextSession);
+      })
+      .catch(() => {
+        const sessionRole = getSessionRole({ user });
 
-    onSessionChange(
-      buildSession(
-        sessionRole,
-        session.user?.email ?? '',
-        'supabase',
-        getMemberProfile(session.user),
-        session.user?.id ?? '',
-      ),
-    )
-  })
+        if (!roleOptions.some((role) => role.id === sessionRole)) {
+          onSessionChange(null);
+          return;
+        }
+
+        onSessionChange(
+          buildSession(
+            sessionRole,
+            user.email ?? '',
+            'firebase',
+            getMemberProfile(user),
+            user.uid ?? ''
+          )
+        );
+      });
+  });
 
   return () => {
-    subscription.unsubscribe()
+    unsubscribe();
+  };
+}
+
+export async function resendPrayerAppConfirmationEmail(email) {
+  const trimmedEmail = normalizeEmailAddress(email);
+
+  if (!trimmedEmail) {
+    return { error: 'Enter your email address before resending the confirmation email.' };
   }
+
+  if (!isValidEmailAddress(trimmedEmail)) {
+    return { error: 'Enter a valid email address before resending the confirmation email.' };
+  }
+
+  if (!isFirebaseConfigured || !firebaseAuth) {
+    return { error: 'Confirmation emails are only available when Firebase auth is configured.' };
+  }
+
+  if (getAuthRateLimitUntil() > Date.now()) {
+    return { error: getAuthRateLimitMessage() };
+  }
+
+  const currentUser = firebaseAuth.currentUser;
+
+  if (!currentUser || currentUser.email?.toLowerCase() !== trimmedEmail) {
+    return {
+      error:
+        'Firebase can resend the verification email only for the account currently open in this browser. Sign in again with that account first.',
+    };
+  }
+
+  if (currentUser.emailVerified) {
+    return { message: 'This email address is already verified.' };
+  }
+
+  try {
+    await sendPrayerAppVerificationEmail(currentUser);
+  } catch (error) {
+    return { error: normalizeFirebaseAuthError(error) };
+  }
+
+  clearAuthRateLimitCooldown();
+
+  return {
+    message: 'Confirmation email sent. Check your inbox and spam folder for the latest message.',
+  };
 }

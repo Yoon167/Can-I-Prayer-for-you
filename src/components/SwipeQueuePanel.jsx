@@ -4,9 +4,11 @@ function SwipeQueuePanel({
   nextDeckCard,
   prayedDeckCount,
   pastoralReviewCount,
+  lastDeckAction,
   swipeIntent,
   swipeCardTransform,
   onDeckDecision,
+  onSendToReview,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -44,12 +46,12 @@ function SwipeQueuePanel({
               <div className="swipe-badges">
                 <span
                   className={
-                    swipeIntent === 'review'
-                      ? 'swipe-badge swipe-badge-review active'
-                      : 'swipe-badge swipe-badge-review'
+                    swipeIntent === 'pending'
+                      ? 'swipe-badge swipe-badge-pending active'
+                      : 'swipe-badge swipe-badge-pending'
                   }
                 >
-                  Pastoral review
+                  Pending
                 </span>
                 <span
                   className={
@@ -76,6 +78,7 @@ function SwipeQueuePanel({
                 <span>{currentDeckCard.confidentiality}</span>
                 <span>{currentDeckCard.submittedBy}</span>
                 <span>{currentDeckCard.assignedTo}</span>
+                {currentDeckCard.followUpStatus === 'requested' ? <span>Follow-up requested</span> : null}
               </div>
             </section>
           </div>
@@ -83,8 +86,15 @@ function SwipeQueuePanel({
           <div className="swipe-actions-row">
             <button
               type="button"
+              className="ghost-action"
+              onClick={() => onDeckDecision('pending')}
+            >
+              Keep pending
+            </button>
+            <button
+              type="button"
               className="ghost-action review-action"
-              onClick={() => onDeckDecision('review')}
+              onClick={onSendToReview}
             >
               Send to pastoral review
             </button>
@@ -100,6 +110,7 @@ function SwipeQueuePanel({
           <div className="swipe-summary">
             <p>{prayedDeckCount} prayed from deck</p>
             <p>{pastoralReviewCount} in pastoral review</p>
+            {lastDeckAction ? <p className="swipe-live-status">Live update: {lastDeckAction}</p> : null}
           </div>
         </div>
       ) : (

@@ -1,104 +1,105 @@
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  orderBy,
+  query,
+  setDoc,
+} from 'firebase/firestore'
+import { firebaseDb, isFirebaseConfigured } from '../lib/firebaseClient.js'
+import { createFirestoreSubscription, normalizeFirebaseSyncError } from './firebaseSyncUtils.js'
 
-const journalEntriesTable = 'journal_entries'
+const journalEntriesCollection = 'journal_entries'
 
-function normalizeJournalEntryRow(row) {
+function normalizeJournalEntryRecord(record, id) {
   return {
-    id: row.id,
-    title: row.title ?? '',
-    detail: row.detail ?? '',
-    date: row.entry_date ?? '',
+    id,
+    title: record.title ?? '',
+    detail: record.detail ?? '',
+    date: record.date ?? '',
   }
 }
 
 function buildJournalEntryPayload(entry) {
   return {
-    id: entry.id,
     title: entry.title,
     detail: entry.detail,
-    entry_date: entry.date,
+    date: entry.date,
+    createdAt: entry.createdAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   }
 }
 
-export const isJournalSyncConfigured = isSupabaseConfigured
+export const isJournalSyncConfigured = isFirebaseConfigured
 
 export async function listJournalEntries() {
-  if (!supabase || !isJournalSyncConfigured) {
+  if (!firebaseDb || !isJournalSyncConfigured) {
     return { items: [], error: null }
   }
 
-  const { data, error } = await supabase
-    .from(journalEntriesTable)
-    .select('id, title, detail, entry_date, created_at')
-    .order('created_at', { ascending: false })
+  try {
+    const snapshot = await getDocs(
+      query(collection(firebaseDb, journalEntriesCollection), orderBy('createdAt', 'desc')),
+    )
 
-  if (error) {
-    return { items: [], error: error.message }
-  }
-
-  return {
-    items: data.map(normalizeJournalEntryRow),
-    error: null,
+    return {
+      items: snapshot.docs.map((documentSnapshot) =>
+        normalizeJournalEntryRecord(documentSnapshot.data(), documentSnapshot.id),
+      ),
+      error: null,
+    }
+  } catch (error) {
+    return { items: [], error: normalizeFirebaseSyncError(error, 'your journal') }
   }
 }
 
 export async function createJournalEntry(entry) {
-  if (!supabase || !isJournalSyncConfigured) {
+  if (!firebaseDb || !isJournalSyncConfigured) {
     return { item: entry, error: null }
   }
 
-  const { data, error } = await supabase
-    .from(journalEntriesTable)
-    .insert(buildJournalEntryPayload(entry))
-    .select('id, title, detail, entry_date, created_at')
-    .single()
+  try {
+    const payload = buildJournalEntryPayload(entry)
+    await setDoc(doc(firebaseDb, journalEntriesCollection, entry.id), payload)
 
-  if (error) {
-    return { item: null, error: error.message }
-  }
-
-  return {
-    item: normalizeJournalEntryRow(data),
-    error: null,
+    return {
+      item: normalizeJournalEntryRecord(payload, entry.id),
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeFirebaseSyncError(error, 'your journal') }
   }
 }
 
 export async function deleteJournalEntry(entryId) {
-  if (!supabase || !isJournalSyncConfigured) {
+  if (!firebaseDb || !isJournalSyncConfigured) {
     return { error: null }
   }
 
-  const { error } = await supabase.from(journalEntriesTable).delete().eq('id', entryId)
+  try {
+    await deleteDoc(doc(firebaseDb, journalEntriesCollection, entryId))
 
-  return {
-    error: error ? error.message : null,
+    return {
+      error: null,
+    }
+  } catch (error) {
+    return {
+      error: normalizeFirebaseSyncError(error, 'your journal'),
+    }
   }
 }
 
 export function subscribeToJournalEntries(onItemsChange, onError) {
-  if (!supabase || !isJournalSyncConfigured) {
+  if (!firebaseDb || !isJournalSyncConfigured) {
     return () => {}
   }
 
-  const channel = supabase
-    .channel('journal-entries-sync')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: journalEntriesTable },
-      async () => {
-        const { items, error } = await listJournalEntries()
-
-        if (error) {
-          onError?.(error)
-          return
-        }
-
-        onItemsChange(items)
-      },
-    )
-    .subscribe()
-
-  return () => {
-    supabase.removeChannel(channel)
-  }
+  return createFirestoreSubscription({
+    queryRef: query(collection(firebaseDb, journalEntriesCollection), orderBy('createdAt', 'desc')),
+    resourceLabel: 'your journal',
+    loadLatest: listJournalEntries,
+    onData: ({ items }) => onItemsChange(items),
+    onError,
+  })
 }

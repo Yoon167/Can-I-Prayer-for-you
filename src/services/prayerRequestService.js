@@ -1,165 +1,212 @@
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient.js'
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+  setDoc,
+} from 'firebase/firestore'
+import { firebaseDb, isFirebaseConfigured } from '../lib/firebaseClient.js'
+import { createFirestoreSubscription, normalizeFirebaseSyncError } from './firebaseSyncUtils.js'
 
-const prayerRequestsTable = 'prayer_requests'
+const prayerRequestsCollection = 'prayer_requests'
 
-function normalizePrayerRequestRow(row) {
+function normalizeFollowUpMessages(messages) {
+  if (!Array.isArray(messages)) {
+    return []
+  }
+
+  return messages
+    .filter((message) => message && typeof message === 'object')
+    .map((message) => ({
+      id: message.id ?? '',
+      text: message.text ?? '',
+      authorName: message.authorName ?? 'Prayer team',
+      authorRole: message.authorRole ?? 'Member',
+      senderType: message.senderType ?? 'team',
+      createdAt: message.createdAt ?? null,
+    }))
+    .filter((message) => message.text)
+}
+
+function normalizePrayerRequestRecord(record, id) {
   return {
-    id: row.id,
-    label: row.label ?? '',
-    completed: Boolean(row.completed),
-    answeredAt: row.answered_at ?? null,
-    answeredNote: row.answered_note ?? '',
-    requestedBy: row.requested_by ?? 'Community member',
-    isAnonymous: Boolean(row.is_anonymous),
-    workflowStatus: row.workflow_status ?? 'queue',
-    category: row.category ?? 'Community care',
-    confidentiality: row.confidentiality ?? 'Intercessor safe',
-    submittedBy: row.submitted_by ?? 'Prayer app',
-    assignedTo: row.assigned_to ?? 'Open team',
-    flaggedAt: row.flagged_at ?? null,
-    prayedAt: row.prayed_at ?? null,
+    id,
+    label: record.label ?? '',
+    completed: Boolean(record.completed),
+    answeredAt: record.answeredAt ?? null,
+    answeredNote: record.answeredNote ?? '',
+    requestedBy: record.requestedBy ?? 'Community member',
+    isAnonymous: Boolean(record.isAnonymous),
+    workflowStatus: record.workflowStatus ?? 'queue',
+    category: record.category ?? 'Community care',
+    confidentiality: record.confidentiality ?? 'Intercessor safe',
+    submittedBy: record.submittedBy ?? 'Prayer app',
+    assignedTo: record.assignedTo ?? 'Open team',
+    flaggedAt: record.flaggedAt ?? null,
+    prayedAt: record.prayedAt ?? null,
+    ownerUserId: record.ownerUserId ?? null,
+    visibilityScope:
+      record.visibilityScope ??
+      ((record.confidentiality ?? '').toLowerCase().includes('pastoral') ? 'pastoral' : 'team'),
+    followUpStatus: record.followUpStatus ?? 'none',
+    followUpMessages: normalizeFollowUpMessages(record.followUpMessages),
+    prayedNotice: record.prayedNotice ?? '',
+    prayedNotifiedAt: record.prayedNotifiedAt ?? null,
+    prayedBy: record.prayedBy ?? '',
+    testimonyText: record.testimonyText ?? '',
+    testimonyShared: Boolean(record.testimonyShared),
   }
 }
 
 function buildPrayerRequestPayload(item) {
-  return {
-    id: item.id,
+  const payload = {
     label: item.label,
     completed: item.completed,
-    answered_at: item.answeredAt,
-    answered_note: item.answeredNote,
-    requested_by: item.requestedBy,
-    is_anonymous: item.isAnonymous,
-    workflow_status: item.workflowStatus,
+    answeredAt: item.answeredAt,
+    answeredNote: item.answeredNote,
+    requestedBy: item.requestedBy,
+    isAnonymous: item.isAnonymous,
+    workflowStatus: item.workflowStatus,
     category: item.category,
     confidentiality: item.confidentiality,
-    submitted_by: item.submittedBy,
-    assigned_to: item.assignedTo,
-    flagged_at: item.flaggedAt,
-    prayed_at: item.prayedAt,
+    submittedBy: item.submittedBy,
+    assignedTo: item.assignedTo,
+    flaggedAt: item.flaggedAt,
+    prayedAt: item.prayedAt,
+    ownerUserId: item.ownerUserId ?? null,
+    visibilityScope: item.visibilityScope ?? 'team',
+    followUpStatus: item.followUpStatus ?? 'none',
+    followUpMessages: item.followUpMessages ?? [],
+    prayedNotice: item.prayedNotice ?? '',
+    prayedNotifiedAt: item.prayedNotifiedAt ?? null,
+    prayedBy: item.prayedBy ?? '',
+    testimonyText: item.testimonyText ?? '',
+    testimonyShared: item.testimonyShared ?? false,
+    updatedAt: new Date().toISOString(),
   }
+
+  return payload
 }
 
-export const isPrayerRequestSyncConfigured = isSupabaseConfigured
+function buildPrayerRequestUpdatePayload(updates) {
+  const nextPayload = {}
+
+  Object.entries(updates).forEach(([key, value]) => {
+    if (value !== undefined) {
+      nextPayload[key] = value
+    }
+  })
+
+  nextPayload.updatedAt = new Date().toISOString()
+
+  if ('followUpMessages' in nextPayload) {
+    nextPayload.followUpMessages = normalizeFollowUpMessages(nextPayload.followUpMessages)
+  }
+
+  return nextPayload
+}
+
+export const isPrayerRequestSyncConfigured = isFirebaseConfigured
 
 export async function listPrayerRequests() {
-  if (!supabase || !isPrayerRequestSyncConfigured) {
+  if (!firebaseDb || !isPrayerRequestSyncConfigured) {
     return { items: [], error: null }
   }
 
-  const { data, error } = await supabase
-    .from(prayerRequestsTable)
-    .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
-    .order('created_at', { ascending: false })
+  try {
+    const snapshot = await getDocs(
+      query(collection(firebaseDb, prayerRequestsCollection), orderBy('createdAt', 'desc')),
+    )
 
-  if (error) {
-    return { items: [], error: error.message }
-  }
-
-  return {
-    items: data.map(normalizePrayerRequestRow),
-    error: null,
+    return {
+      items: snapshot.docs.map((documentSnapshot) =>
+        normalizePrayerRequestRecord(documentSnapshot.data(), documentSnapshot.id),
+      ),
+      error: null,
+    }
+  } catch (error) {
+    return { items: [], error: normalizeFirebaseSyncError(error, 'prayer requests') }
   }
 }
 
 export async function createPrayerRequest(item) {
-  if (!supabase || !isPrayerRequestSyncConfigured) {
+  if (!firebaseDb || !isPrayerRequestSyncConfigured) {
     return { item, error: null }
   }
 
-  const { data, error } = await supabase
-    .from(prayerRequestsTable)
-    .insert(buildPrayerRequestPayload(item))
-    .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
-    .single()
+  try {
+    const payload = {
+      ...buildPrayerRequestPayload(item),
+      createdAt: item.createdAt ?? new Date().toISOString(),
+    }
+    await setDoc(doc(firebaseDb, prayerRequestsCollection, item.id), payload)
 
-  if (error) {
-    return { item: null, error: error.message }
-  }
-
-  return {
-    item: normalizePrayerRequestRow(data),
-    error: null,
+    return {
+      item: normalizePrayerRequestRecord(payload, item.id),
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeFirebaseSyncError(error, 'prayer requests') }
   }
 }
 
 export async function updatePrayerRequest(itemId, updates) {
-  if (!supabase || !isPrayerRequestSyncConfigured) {
+  if (!firebaseDb || !isPrayerRequestSyncConfigured) {
     return { item: { id: itemId, ...updates }, error: null }
   }
 
-  const payload = buildPrayerRequestPayload({
-    id: itemId,
-    label: updates.label ?? '',
-    completed: updates.completed ?? false,
-    answeredAt: updates.answeredAt ?? null,
-    answeredNote: updates.answeredNote ?? '',
-    requestedBy: updates.requestedBy ?? 'Community member',
-    isAnonymous: updates.isAnonymous ?? false,
-    workflowStatus: updates.workflowStatus ?? 'queue',
-    category: updates.category ?? 'Community care',
-    confidentiality: updates.confidentiality ?? 'Intercessor safe',
-    submittedBy: updates.submittedBy ?? 'Prayer app',
-    assignedTo: updates.assignedTo ?? 'Open team',
-    flaggedAt: updates.flaggedAt ?? null,
-    prayedAt: updates.prayedAt ?? null,
-  })
+  try {
+    const documentRef = doc(firebaseDb, prayerRequestsCollection, itemId)
+    const existingSnapshot = await getDoc(documentRef)
+    const existingRecord = existingSnapshot.exists() ? existingSnapshot.data() : {}
+    const nextRecord = {
+      ...existingRecord,
+      ...buildPrayerRequestUpdatePayload(updates),
+      createdAt: existingRecord.createdAt ?? updates.createdAt ?? new Date().toISOString(),
+    }
 
-  delete payload.id
+    await setDoc(documentRef, nextRecord, { merge: true })
 
-  const { data, error } = await supabase
-    .from(prayerRequestsTable)
-    .update(payload)
-    .eq('id', itemId)
-    .select('id, label, completed, answered_at, answered_note, requested_by, is_anonymous, workflow_status, category, confidentiality, submitted_by, assigned_to, flagged_at, prayed_at, created_at')
-    .single()
-
-  if (error) {
-    return { item: null, error: error.message }
-  }
-
-  return {
-    item: normalizePrayerRequestRow(data),
-    error: null,
+    return {
+      item: normalizePrayerRequestRecord(nextRecord, itemId),
+      error: null,
+    }
+  } catch (error) {
+    return { item: null, error: normalizeFirebaseSyncError(error, 'prayer requests') }
   }
 }
 
 export async function deletePrayerRequest(itemId) {
-  if (!supabase || !isPrayerRequestSyncConfigured) {
+  if (!firebaseDb || !isPrayerRequestSyncConfigured) {
     return { error: null }
   }
 
-  const { error } = await supabase.from(prayerRequestsTable).delete().eq('id', itemId)
+  try {
+    await deleteDoc(doc(firebaseDb, prayerRequestsCollection, itemId))
 
-  return {
-    error: error ? error.message : null,
+    return {
+      error: null,
+    }
+  } catch (error) {
+    return {
+      error: normalizeFirebaseSyncError(error, 'prayer requests'),
+    }
   }
 }
 
 export function subscribeToPrayerRequests(onItemsChange, onError) {
-  if (!supabase || !isPrayerRequestSyncConfigured) {
+  if (!firebaseDb || !isPrayerRequestSyncConfigured) {
     return () => {}
   }
 
-  const channel = supabase
-    .channel('prayer-requests-sync')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: prayerRequestsTable },
-      async () => {
-        const { items, error } = await listPrayerRequests()
-
-        if (error) {
-          onError?.(error)
-          return
-        }
-
-        onItemsChange(items)
-      },
-    )
-    .subscribe()
-
-  return () => {
-    supabase.removeChannel(channel)
-  }
+  return createFirestoreSubscription({
+    queryRef: query(collection(firebaseDb, prayerRequestsCollection), orderBy('createdAt', 'desc')),
+    resourceLabel: 'prayer requests',
+    loadLatest: listPrayerRequests,
+    onData: ({ items }) => onItemsChange(items),
+    onError,
+  })
 }

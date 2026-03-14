@@ -1,0 +1,176 @@
+import { useState } from 'react'
+
+function NotificationCenter({
+  notifications,
+  unreadCount,
+  onMarkAllRead,
+  onNotificationSelect,
+  onRequestPermission,
+  notificationPermission,
+  welcomeVoiceEnabled,
+  welcomeVoiceLanguage,
+  welcomeVoiceOptions,
+  onToggleWelcomeVoice,
+  onChangeWelcomeVoiceLanguage,
+  onReplayWelcomeVoice,
+}) {
+  const [selectedFilter, setSelectedFilter] = useState('all')
+  const hasNotifications = notifications.length > 0
+  const canRequestPermission = notificationPermission === 'default'
+  const browserNotificationsEnabled = notificationPermission === 'granted'
+  const browserNotificationsUnavailable = notificationPermission === 'unsupported'
+  const filterOptions = [
+    { id: 'all', label: 'All', matches: () => true },
+    {
+      id: 'prayer',
+      label: 'Prayer',
+      matches: (notification) => notification.type === 'request' || notification.type === 'prayed',
+    },
+    { id: 'follow-up', label: 'Follow-up', matches: (notification) => notification.type === 'followUp' },
+    { id: 'answered', label: 'Answered', matches: (notification) => notification.type === 'answered' },
+    { id: 'system', label: 'System', matches: (notification) => notification.type === 'system' },
+  ]
+  const activeFilter = filterOptions.find((option) => option.id === selectedFilter) ?? filterOptions[0]
+  const visibleNotifications = notifications.filter(activeFilter.matches)
+  const hasVisibleNotifications = visibleNotifications.length > 0
+
+  function getFilterCount(option) {
+    return notifications.filter(option.matches).length
+  }
+
+  return (
+    <section className="panel panel-wide notification-page" aria-label="Notifications">
+      <div className="notification-panel-header">
+        <div>
+          <p className="eyebrow">Prayer updates</p>
+          <h2>Notifications</h2>
+        </div>
+        <span className="panel-tag">{unreadCount} unread</span>
+      </div>
+
+      <div className="notification-panel-tools">
+        <section className="notification-settings-card">
+          <p className="moment-time">Browser alerts</p>
+          <p>
+            {browserNotificationsEnabled
+              ? 'Browser notifications are enabled for new prayer activity.'
+              : browserNotificationsUnavailable
+                ? 'Browser notifications are not available in this browser.'
+                : 'Enable browser notifications to get popup alerts for new prayer activity.'}
+          </p>
+          <p className="notification-settings-note">
+            Members also receive a live prayer alert when the intercessory team marks a request as prayed.
+          </p>
+          {canRequestPermission ? (
+            <button type="button" className="secondary-action" onClick={onRequestPermission}>
+              Enable alerts
+            </button>
+          ) : null}
+        </section>
+
+        <section className="notification-settings-card">
+          <p className="moment-time">Welcome voice</p>
+          <p>
+            {welcomeVoiceEnabled
+              ? 'A welcome voice plays once per session using the best voice your device provides.'
+              : 'Welcome voice is muted.'}
+          </p>
+          <p className="notification-settings-note">
+            Choose the language you want for the spoken welcome. Voice quality depends on the voices available on this phone or browser.
+          </p>
+          <div className="voice-language-grid" aria-label="Welcome voice languages">
+            {welcomeVoiceOptions.map((voiceLanguage) => (
+              <button
+                key={voiceLanguage.id}
+                type="button"
+                className={
+                  welcomeVoiceLanguage === voiceLanguage.id
+                    ? 'voice-language-chip voice-language-chip-active voice-language-button'
+                    : 'voice-language-chip voice-language-button'
+                }
+                onClick={() => onChangeWelcomeVoiceLanguage(voiceLanguage.id)}
+                aria-pressed={welcomeVoiceLanguage === voiceLanguage.id}
+              >
+                {voiceLanguage.label}
+                <strong>{voiceLanguage.status}</strong>
+              </button>
+            ))}
+          </div>
+          <div className="notification-settings-actions">
+            <button type="button" className="secondary-action" onClick={onToggleWelcomeVoice}>
+              {welcomeVoiceEnabled ? 'Mute welcome voice' : 'Enable welcome voice'}
+            </button>
+            <button type="button" className="ghost-action" onClick={onReplayWelcomeVoice}>
+              Replay welcome
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <div className="notification-list-header">
+        <p className="moment-time">Recent activity</p>
+        {hasNotifications ? (
+          <button type="button" className="ghost-action" onClick={onMarkAllRead}>
+            Mark all read
+          </button>
+        ) : null}
+      </div>
+
+      <div className="notification-filter-bar" role="tablist" aria-label="Notification categories">
+        {filterOptions.map((option) => {
+          const count = getFilterCount(option)
+
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="tab"
+              aria-selected={selectedFilter === option.id}
+              className={
+                selectedFilter === option.id
+                  ? 'notification-filter-chip notification-filter-chip-active'
+                  : 'notification-filter-chip'
+              }
+              onClick={() => setSelectedFilter(option.id)}
+            >
+              <span>{option.label}</span>
+              <span className="notification-filter-count">{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {hasVisibleNotifications ? (
+        <div className="notification-list" role="list">
+          {visibleNotifications.map((notification) => (
+            <button
+              key={notification.id}
+              type="button"
+              className={notification.read ? 'notification-item' : 'notification-item notification-item-unread'}
+              onClick={() => onNotificationSelect(notification.id, notification.view ?? 'dashboard')}
+            >
+              <span className="notification-item-meta">
+                <span className="notification-item-type">{notification.typeLabel}</span>
+                <span className="notification-item-time">{notification.createdLabel}</span>
+              </span>
+              <strong>{notification.title}</strong>
+              <span>{notification.detail}</span>
+            </button>
+          ))}
+        </div>
+      ) : hasNotifications ? (
+        <div className="notification-empty-state">
+          <p className="moment-time">No {activeFilter.label.toLowerCase()} alerts</p>
+          <p>Switch categories to see other prayer activity notifications.</p>
+        </div>
+      ) : (
+        <div className="notification-empty-state">
+          <p className="moment-time">No alerts yet</p>
+          <p>New prayer requests, follow-up updates, and answered reports will appear here.</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
+export default NotificationCenter

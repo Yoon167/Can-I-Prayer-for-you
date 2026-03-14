@@ -1,4 +1,14 @@
-function AnsweredPrayersPanel({ answeredFocusItems, handleRestoreAnswered, handleAnsweredNoteChange }) {
+function AnsweredPrayersPanel({
+  answeredFocusItems,
+  authUserId,
+  canManagePrayerWorkflow,
+  handleRestoreAnswered,
+  handleAnsweredNoteChange,
+  testimonyDrafts,
+  handleTestimonyDraftChange,
+  handleTestimonyShareChange,
+  handleSaveTestimony,
+}) {
   return (
     <article className="panel panel-wide">
       <div className="panel-heading">
@@ -38,6 +48,29 @@ function AnsweredPrayersPanel({ answeredFocusItems, handleRestoreAnswered, handl
                 placeholder="Write what changed, what was provided, or what you learned."
                 rows="3"
               />
+              {canManagePrayerWorkflow || item.ownerUserId === authUserId ? (
+                <div className="testimony-editor">
+                  <label className="anonymous-toggle" htmlFor={`testimony-share-${item.id}`}>
+                    <input
+                      id={`testimony-share-${item.id}`}
+                      type="checkbox"
+                      checked={testimonyDrafts[item.id]?.shared ?? item.testimonyShared ?? false}
+                      onChange={(event) => handleTestimonyShareChange(item.id, event.target.checked)}
+                    />
+                    <span>I am willing to share this testimony</span>
+                  </label>
+                  <textarea
+                    className="answered-note-input"
+                    value={testimonyDrafts[item.id]?.text ?? item.testimonyText ?? ''}
+                    onChange={(event) => handleTestimonyDraftChange(item.id, event.target.value)}
+                    placeholder="Share what God did, what changed, and what you want others to know."
+                    rows="4"
+                  />
+                  <button type="button" className="form-action" onClick={() => handleSaveTestimony(item.id)}>
+                    Save testimony
+                  </button>
+                </div>
+              ) : null}
             </section>
           ))}
         </div>

@@ -1,13 +1,18 @@
+import MemberAccessPanel from './MemberAccessPanel.jsx'
+
 function ProfileView({
   authSession,
-  activeRoleConfig,
   activeCount,
   answeredCount,
   journalCount,
   memberProfile,
   memberProfileForm,
   memberProfileStatus,
+  accountUpgradeStatus,
+  accountUpgradeTone,
   authBusy,
+  handleSignOut,
+  handleUpgradeLocalAccount,
   handleMemberProfileChange,
   handleMemberAvatarChange,
   handleSaveMemberProfile,
@@ -17,9 +22,16 @@ function ProfileView({
   teachingTone,
   handleTeachingChange,
   handleSaveTeaching,
+  canManageMembers,
+  members,
+  memberDirectoryBusy,
+  memberDirectoryStatus,
+  memberDirectoryTone,
+  handleRefreshMemberDirectory,
+  handleUpdateMemberRole,
+  roleOptions,
 }) {
   const memberIdentity = memberProfile.displayName || memberProfile.fullName || 'Not saved yet'
-  const accessLevelLabel = activeRoleConfig.label
 
   return (
     <section className="content-grid profile-grid">
@@ -29,7 +41,6 @@ function ProfileView({
             <p className="eyebrow">Profile</p>
             <h2>Your access and activity</h2>
           </div>
-          <span className="panel-tag">{activeRoleConfig.label}</span>
         </div>
 
         <div className="profile-grid-cards">
@@ -37,11 +48,21 @@ function ProfileView({
             <p className="moment-time">Account</p>
             <h3>{authSession.email || 'Local session'}</h3>
             <p>{authSession.provider ? `Provider: ${authSession.provider}` : 'Provider not available'}</p>
-          </section>
-          <section className="profile-card">
-            <p className="moment-time">Access level</p>
-            <h3>{accessLevelLabel}</h3>
-            <p>{activeRoleConfig.summary}</p>
+            {authSession.provider === 'local' ? (
+              <>
+                <p>
+                  This legacy browser account only works on this browser until you upgrade it to Firebase.
+                </p>
+                {accountUpgradeStatus ? (
+                  <p className={accountUpgradeTone === 'error' ? 'auth-error' : 'form-helper profile-form-helper'}>
+                    {accountUpgradeStatus}
+                  </p>
+                ) : null}
+                <button type="button" className="form-action profile-save-action" onClick={handleUpgradeLocalAccount} disabled={authBusy}>
+                  {authBusy ? 'Connecting account...' : 'Upgrade to Firebase'}
+                </button>
+              </>
+            ) : null}
           </section>
           <section className="profile-card">
             <p className="moment-time">Member identity</p>
@@ -51,6 +72,11 @@ function ProfileView({
                 ? `Saved member profile for ${memberProfile.fullName}.`
                 : 'Add your member details so prayer requests can show your name when you do not post anonymously.'}
             </p>
+          </section>
+          <section className="profile-card">
+            <p className="moment-time">Prayer snapshot</p>
+            <h3>{activeCount} active requests</h3>
+            <p>{answeredCount} answered prayers and {journalCount} journal notes in your current rhythm.</p>
           </section>
         </div>
       </article>
@@ -305,6 +331,34 @@ function ProfileView({
             </button>
           </form>
         </article>
+      ) : null}
+
+      <article className="panel panel-wide profile-signout-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Session</p>
+            <h2>Sign out of this account</h2>
+          </div>
+        </div>
+        <p className="form-helper profile-form-helper">
+          Use sign out when you want to switch accounts before testing roles, permissions, or release behavior.
+        </p>
+        <button type="button" className="ghost-action profile-signout-action" onClick={handleSignOut} disabled={authBusy}>
+          Sign out
+        </button>
+      </article>
+
+      {canManageMembers ? (
+        <MemberAccessPanel
+          authSession={authSession}
+          members={members}
+          roleOptions={roleOptions}
+          busy={memberDirectoryBusy}
+          status={memberDirectoryStatus}
+          tone={memberDirectoryTone}
+          onRefresh={handleRefreshMemberDirectory}
+          onUpdateRole={handleUpdateMemberRole}
+        />
       ) : null}
     </section>
   )

@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserRole() {
+      return signedIn()
+        ? get(/databases/$(database)/documents/member_accounts/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isPrivilegedRole() {
+      return currentUserRole() in ['pastor', 'prayer-core'];
+    }
+
+    function ownsMemberAccount(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    match /member_accounts/{userId} {
+      allow read: if signedIn();
+      allow create: if ownsMemberAccount(userId);
+      allow update: if ownsMemberAccount(userId) || isPrivilegedRole();
+    }
+
+    match /prayer_requests/{requestId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
+      allow delete: if isPrivilegedRole();
+    }
+
+    match /journal_entries/{entryId} {
+      allow read, write: if signedIn();
+    }
+
+    match /daily_teachings/{teachingId} {
+      allow read: if true;
+      allow write: if isPrivilegedRole();
+    }
+  }
+}
