@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { App as CapacitorApp } from '@capacitor/app'
 import { TextToSpeech } from '@capacitor-community/text-to-speech'
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 import './App.css'
@@ -1193,11 +1194,25 @@ function App() {
 
     let isMounted = true
 
-    const initializeFirebaseAuth = async () => {
-      const callbackResult = await completePrayerAppEmailConfirmationFromUrl()
+    const restoreAuthSession = async () => {
+      const session = await restorePrayerAppSession(roleOptions)
 
       if (!isMounted) {
         return
+      }
+
+      if (session || !shouldPreserveLocalSession()) {
+        applyAuthSession(session)
+      }
+
+      setAuthReady(true)
+    }
+
+    const processEmailConfirmationUrl = async (callbackUrl) => {
+      const callbackResult = await completePrayerAppEmailConfirmationFromUrl(callbackUrl)
+
+      if (!isMounted) {
+        return callbackResult
       }
 
       if (callbackResult.error) {
@@ -1210,17 +1225,13 @@ function App() {
         setAuthNotice(callbackResult.message)
       }
 
-      const session = await restorePrayerAppSession(roleOptions)
+      await restoreAuthSession()
 
-      if (!isMounted) {
-        return
-      }
+      return callbackResult
+    }
 
-      if (session || !shouldPreserveLocalSession()) {
-        applyAuthSession(session)
-      }
-
-      setAuthReady(true)
+    const initializeFirebaseAuth = async () => {
+      await processEmailConfirmationUrl()
     }
 
     const handleAuthRestoreFailure = () => {
@@ -1236,6 +1247,20 @@ function App() {
         'Unable to connect to Firebase right now. Check your Firebase web config and authorized domain settings, then refresh.',
       )
       setAuthReady(true)
+    }
+
+    let appUrlListener = null
+
+    if (Capacitor.isNativePlatform()) {
+      void CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+        if (!url) {
+          return
+        }
+
+        void processEmailConfirmationUrl(url)
+      }).then((listenerHandle) => {
+        appUrlListener = listenerHandle
+      })
     }
 
     initializeFirebaseAuth()
@@ -1266,6 +1291,7 @@ function App() {
     return () => {
       isMounted = false
       unsubscribe()
+      void appUrlListener?.remove()
     }
   }, [applyAuthSession])
 

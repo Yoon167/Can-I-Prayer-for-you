@@ -13,6 +13,7 @@ This app uses Firebase Auth for sign-in and Firestore for synced prayer data.
 1. Open `Authentication`.
 2. Enable the `Email/Password` provider.
 3. In `Settings`, add your deployed domain to `Authorized domains`.
+4. For the Android APK flow, add the Android app package name `io.github.yoon167.prayerapp` in your Firebase project settings and register the app signing `SHA-1` and `SHA-256` fingerprints so Firebase Hosting email links can reopen the app.
 
 The app expects email verification to stay enabled in the app flow. New accounts are created first, then the app sends a verification email and blocks cloud session use until the address is verified.
 
@@ -44,6 +45,8 @@ VITE_FIREBASE_MEASUREMENT_ID=
 ```
 
 `VITE_FIREBASE_MEASUREMENT_ID` is optional.
+
+For mobile verification links, make sure the Firebase Hosting domain used by `VITE_FIREBASE_AUTH_DOMAIN` is active. Firebase Auth uses that Hosting domain to generate Android app links when `handleCodeInApp` is enabled.
 
 ## 5. Deploy Firestore rules
 

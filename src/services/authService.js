@@ -2,11 +2,13 @@ import {
   applyActionCode,
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reload,
   sendEmailVerification,
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
 } from 'firebase/auth'
+import { Capacitor } from '@capacitor/core'
 import { firebaseAuth, isFirebaseConfigured } from '../lib/firebaseClient.js'
 import { getMemberAccount, upsertMemberAccount } from './memberDirectoryService.js'
 import { formatAnsweredDate } from '../utils/prayerAppUtils.js'
@@ -14,6 +16,7 @@ import { formatAnsweredDate } from '../utils/prayerAppUtils.js'
 const localAccountsStorageKey = 'prayer-app-local-accounts'
 const authRateLimitStorageKey = 'prayer-app-auth-rate-limit-until'
 const authRateLimitCooldownMs = 60 * 1000
+const nativeAndroidPackageName = 'io.github.yoon167.prayerapp'
 
 function normalizeEmailAddress(email) {
   return email.trim().toLowerCase()
@@ -62,6 +65,12 @@ function getAuthRateLimitMessage() {
 }
 
 function getFirebaseEmailRedirectUrl() {
+  const authDomain = firebaseAuth?.app?.options?.authDomain?.trim()
+
+  if (isNativePrayerAppPlatform() && authDomain) {
+    return `https://${authDomain}/`
+  }
+
   if (typeof window === 'undefined') {
     return undefined
   }
@@ -72,8 +81,42 @@ function getFirebaseEmailRedirectUrl() {
   return redirectUrl.toString()
 }
 
-function clearFirebaseAuthUrlParams() {
+function isNativePrayerAppPlatform() {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() !== 'web'
+}
+
+function resolveFirebaseActionUrl(url) {
+  if (!url) {
+    return null
+  }
+
+  try {
+    const parsedUrl = new URL(url)
+    const embeddedLink = parsedUrl.searchParams.get('link')
+    const deepLinkId = parsedUrl.searchParams.get('deep_link_id')
+
+    if (embeddedLink) {
+      return resolveFirebaseActionUrl(embeddedLink)
+    }
+
+    if (deepLinkId) {
+      return resolveFirebaseActionUrl(deepLinkId)
+    }
+
+    return parsedUrl
+  } catch {
+    return null
+  }
+}
+
+function clearFirebaseAuthUrlParams(currentUrl) {
   if (typeof window === 'undefined') {
+    return
+  }
+
+  const activeUrl = currentUrl ? resolveFirebaseActionUrl(currentUrl)?.toString() : window.location.href
+
+  if (activeUrl && activeUrl !== window.location.href) {
     return
   }
 
@@ -165,25 +208,39 @@ function normalizeFirebaseAuthError(error) {
 }
 
 async function sendPrayerAppVerificationEmail(user) {
-  await sendEmailVerification(user, {
+  const actionCodeSettings = {
     url: getFirebaseEmailRedirectUrl(),
     handleCodeInApp: true,
-  })
+  }
+
+  if (isNativePrayerAppPlatform()) {
+    actionCodeSettings.android = {
+      packageName: nativeAndroidPackageName,
+      installApp: true,
+    }
+  }
+
+  await sendEmailVerification(user, actionCodeSettings)
 }
 
-export async function completePrayerAppEmailConfirmationFromUrl() {
+export async function completePrayerAppEmailConfirmationFromUrl(url) {
   if (!isFirebaseConfigured || !firebaseAuth || typeof window === 'undefined') {
     return { handled: false }
   }
 
-  const currentUrl = new URL(window.location.href)
+  const currentUrl = resolveFirebaseActionUrl(url ?? window.location.href)
+
+  if (!currentUrl) {
+    return { handled: false }
+  }
+
   const verificationMode = currentUrl.searchParams.get('mode')
   const actionCode = currentUrl.searchParams.get('oobCode')
   const authError = currentUrl.searchParams.get('error')
   const authErrorDescription = currentUrl.searchParams.get('error_description')
 
   if (authError || authErrorDescription) {
-    clearFirebaseAuthUrlParams()
+    clearFirebaseAuthUrlParams(currentUrl.toString())
     return {
       handled: true,
       error: normalizeFirebaseUrlMessage(
@@ -203,9 +260,14 @@ export async function completePrayerAppEmailConfirmationFromUrl() {
 
   try {
     await applyActionCode(firebaseAuth, actionCode)
-    clearFirebaseAuthUrlParams()
+
+    if (firebaseAuth.currentUser) {
+      await reload(firebaseAuth.currentUser)
+    }
+
+    clearFirebaseAuthUrlParams(currentUrl.toString())
   } catch (error) {
-    clearFirebaseAuthUrlParams()
+    clearFirebaseAuthUrlParams(currentUrl.toString())
     return {
       handled: true,
       error: normalizeFirebaseAuthError(error),
